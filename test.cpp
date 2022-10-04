@@ -1,100 +1,117 @@
 #include "raylib.h"
-#include <iostream>
 
-using namespace std;
-
-#define MAX_FRAME_DELAY     20
-#define MIN_FRAME_DELAY      1
+#define MAX_BUILDINGS   100
 
 //------------------------------------------------------------------------------------
 // Program main entry point
 //------------------------------------------------------------------------------------
 int main(void)
 {
-    cout << "bob the builder";
     // Initialization
     //--------------------------------------------------------------------------------------
-    const int screenWidth = 1200;
-    const int screenHeight = 900;
+    const int screenWidth = 800;
+    const int screenHeight = 450;
 
-    InitWindow(screenWidth, screenHeight, "raylib [textures] example - gif playing");
+    InitWindow(screenWidth, screenHeight, "raylib [core] example - 2d camera");
 
-    int animFrames = 0;
+    Rectangle player = { 400, 280, 40, 40 };
+    Rectangle buildings[MAX_BUILDINGS] = { 0 };
+    Color buildColors[MAX_BUILDINGS] = { 0 };
 
-    // Load all GIF animation frames into a single Image
-    // NOTE: GIF data is always loaded as RGBA (32bit) by default
-    // NOTE: Frames are just appended one after another in image.data memory
-    Image imScarfyAnim = LoadImageAnim("Textures/my_fish.gif", &animFrames);
+    int spacing = 0;
 
-    // Load texture from image
-    // NOTE: We will update this texture when required with next frame data
-    // WARNING: It's not recommended to use this technique for sprites animation,
-    // use spritesheets instead, like illustrated in textures_sprite_anim example
-    Texture2D texScarfyAnim = LoadTextureFromImage(imScarfyAnim);
+    for (int i = 0; i < MAX_BUILDINGS; i++)
+    {
+        buildings[i].width = (float)GetRandomValue(50, 200);
+        buildings[i].height = (float)GetRandomValue(100, 800);
+        buildings[i].y = screenHeight - 130.0f - buildings[i].height;
+        buildings[i].x = -6000.0f + spacing;
 
-    unsigned int nextFrameDataOffset = 0;  // Current byte offset to next frame in image.data
+        spacing += (int)buildings[i].width;
 
-    int currentAnimFrame = 0;       // Current animation frame to load and draw
-    int frameDelay = 8;             // Frame delay to switch between animation frames
-    int frameCounter = 0;           // General frames counter
+        buildColors[i] = (Color){ GetRandomValue(200, 240), GetRandomValue(200, 240), GetRandomValue(200, 250), 255 };
+    }
 
-    SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+    Camera2D camera = { 0 };
+    camera.target = (Vector2){ player.x + 20.0f, player.y + 20.0f };
+    camera.offset = (Vector2){ screenWidth/2.0f, screenHeight/2.0f };
+    camera.rotation = 0.0f;
+    camera.zoom = 1.0f;
+
+    SetTargetFPS(60);                   // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
     // Main game loop
-    while (!WindowShouldClose())    // Detect window close button or ESC key
+    while (!WindowShouldClose())        // Detect window close button or ESC key
     {
         // Update
         //----------------------------------------------------------------------------------
-        frameCounter++;
-        if (frameCounter >= frameDelay)
+        // Player movement
+        if (IsKeyDown(KEY_RIGHT)) player.x += 2;
+        else if (IsKeyDown(KEY_LEFT)) player.x -= 2;
+
+        // Camera target follows player
+        camera.target = (Vector2){ player.x + 20, player.y + 20 };
+
+        // Camera rotation controls
+        if (IsKeyDown(KEY_A)) camera.rotation--;
+        else if (IsKeyDown(KEY_S)) camera.rotation++;
+
+        // Limit camera rotation to 80 degrees (-40 to 40)
+        if (camera.rotation > 40) camera.rotation = 40;
+        else if (camera.rotation < -40) camera.rotation = -40;
+
+        // Camera zoom controls
+        camera.zoom += ((float)GetMouseWheelMove()*0.05f);
+
+        if (camera.zoom > 3.0f) camera.zoom = 3.0f;
+        else if (camera.zoom < 0.1f) camera.zoom = 0.1f;
+
+        // Camera reset (zoom and rotation)
+        if (IsKeyPressed(KEY_R))
         {
-            // Move to next frame
-            // NOTE: If final frame is reached we return to first frame
-            currentAnimFrame++;
-            if (currentAnimFrame >= animFrames) currentAnimFrame = 0;
-
-            // Get memory offset position for next frame data in image.data
-            nextFrameDataOffset = imScarfyAnim.width*imScarfyAnim.height*4*currentAnimFrame;
-
-            // Update GPU texture data with next frame image data
-            // WARNING: Data size (frame size) and pixel format must match already created texture
-            UpdateTexture(texScarfyAnim, ((unsigned char *)imScarfyAnim.data) + nextFrameDataOffset);
-
-            frameCounter = 0;
+            camera.zoom = 1.0f;
+            camera.rotation = 0.0f;
         }
-
-        // Control frames delay
-        if (IsKeyPressed(KEY_RIGHT)) frameDelay++;
-        else if (IsKeyPressed(KEY_LEFT)) frameDelay--;
-
-        if (frameDelay > MAX_FRAME_DELAY) frameDelay = MAX_FRAME_DELAY;
-        else if (frameDelay < MIN_FRAME_DELAY) frameDelay = MIN_FRAME_DELAY;
         //----------------------------------------------------------------------------------
 
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
-
+            
+            // Clear the background.
             ClearBackground(RAYWHITE);
+            
+            // Everything inside this scope, is being manipulated by the camera.
+            // Every drawing outside this scope, will show up on the screen without being transformed by the camera.
+            BeginMode2D(camera);
 
-            DrawText(TextFormat("TOTAL GIF FRAMES:  %02i", animFrames), 50, 30, 20, LIGHTGRAY);
-            DrawText(TextFormat("CURRENT FRAME: %02i", currentAnimFrame), 50, 60, 20, GRAY);
-            DrawText(TextFormat("CURRENT FRAME IMAGE.DATA OFFSET: %02i", nextFrameDataOffset), 50, 90, 20, GRAY);
+                DrawRectangle(-6000, 320, 13000, 8000, DARKGRAY);
 
-            DrawText("FRAMES DELAY: ", 100, 305, 10, DARKGRAY);
-            DrawText(TextFormat("%02i frames", frameDelay), 620, 305, 10, DARKGRAY);
-            DrawText("PRESS RIGHT/LEFT KEYS to CHANGE SPEED!", 290, 350, 10, DARKGRAY);
+                for (int i = 0; i < MAX_BUILDINGS; i++) DrawRectangleRec(buildings[i], buildColors[i]);
 
-            for (int i = 0; i < MAX_FRAME_DELAY; i++)
-            {
-                if (i < frameDelay) DrawRectangle(190 + 21*i, 300, 20, 20, RED);
-                DrawRectangleLines(190 + 21*i, 300, 20, 20, MAROON);
-            }
+                DrawRectangleRec(player, RED);
 
-            DrawTexture(texScarfyAnim, GetScreenWidth()/2 - texScarfyAnim.width/2, 140, WHITE);
+                DrawLine((int)camera.target.x, -screenHeight*10, (int)camera.target.x, screenHeight*10, GREEN);
+                DrawLine(-screenWidth*10, (int)camera.target.y, screenWidth*10, (int)camera.target.y, GREEN);
 
-            DrawText("(c) Scarfy sprite by Eiden Marsal", screenWidth - 200, screenHeight - 20, 10, GRAY);
+            EndMode2D();
+
+            DrawText("SCREEN AREA", 640, 10, 20, RED);
+
+            DrawRectangle(0, 0, screenWidth, 5, RED);
+            DrawRectangle(0, 5, 5, screenHeight - 10, RED);
+            DrawRectangle(screenWidth - 5, 5, 5, screenHeight - 10, RED);
+            DrawRectangle(0, screenHeight - 5, screenWidth, 5, RED);
+
+            DrawRectangle( 10, 10, 250, 113, Fade(SKYBLUE, 0.5f));
+            DrawRectangleLines( 10, 10, 250, 113, BLUE);
+
+            DrawText("Free 2d camera controls:", 20, 20, 10, BLACK);
+            DrawText("- Right/Left to move Offset", 40, 40, 10, DARKGRAY);
+            DrawText("- Mouse Wheel to Zoom in-out", 40, 60, 10, DARKGRAY);
+            DrawText("- A / S to Rotate", 40, 80, 10, DARKGRAY);
+            DrawText("- R to reset Zoom and Rotation", 40, 100, 10, DARKGRAY);
 
         EndDrawing();
         //----------------------------------------------------------------------------------
@@ -102,10 +119,7 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    UnloadTexture(texScarfyAnim);   // Unload texture
-    UnloadImage(imScarfyAnim);      // Unload image (contains all frames)
-
-    CloseWindow();                  // Close window and OpenGL context
+    CloseWindow();        // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
 
     return 0;

@@ -31,7 +31,7 @@ class Location
         void set_location(Location location)
         {
             x = location.x;
-            y = location.x;
+            y = location.y;
         }
 };
 
@@ -74,7 +74,7 @@ class MyGif
             - The gif is loaded as a texture, and manipulated as a texture.
     */
     
-    // Define the private attributes.
+    // Define the protected attributes.
     protected:
     
         // The path to the gif.
@@ -198,6 +198,8 @@ class MyGif
             // Remove the image.
             UnloadImage(my_gif_image); 
         }
+
+        Location get_location() {return location;}
 };
 
 
@@ -214,21 +216,80 @@ class Fish : public MyGif
     
         // The speed of the fish on the x and y axes, pixels/frame;
         float speed_x, speed_y;
+        
+        // The location boundaries of the fish.
+        int left_boundary, right_boundary, top_boundary, bottom_boundary;
        
     public:
-    
-        Fish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, float new_scale = 1, float new_rotation = 0) : MyGif(file_path, new_location, new_size, new_scale, new_rotation)
+        
+        // Counstructor.
+        Fish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary= 0, int new_right_boundary = 0, int new_top_boundary = 0, int new_bottom_boundary = 0, float new_scale = 1, float new_rotation = 0) : MyGif(file_path, new_location, new_size, new_scale, new_rotation)
         {
             // Set the speed of the fish.
             speed_x = new_speed_x;
             speed_y = new_speed_y;
+            
+            // Set the boundaries of the fish.
+            left_boundary = new_left_boundary;
+            right_boundary = new_right_boundary;
+            top_boundary = new_top_boundary;
+            bottom_boundary = new_bottom_boundary;
         }
         
-        void move_left() {location.x -= speed_x; flip_horizontal();}
-        void move_right() {location.x += speed_x; unflip_horizontal();}
-        void move_up() {location.y -= speed_y;}
-        void move_down() {location.y += speed_y;}
+        // Apply movements (including boundaries check).
+        void move_left() 
+        {
+            if (location.x - speed_x < left_boundary) { boundary_exceed(); }
+            else { location.x -= speed_x; flip_horizontal(); }
+        }
+        
+        void move_right() 
+        {
+            if (location.x + speed_x > right_boundary) { boundary_exceed(); }
+            else { location.x += speed_x; unflip_horizontal(); }
+        }
+        
+        void move_up() 
+        {
+            if (location.y - speed_y < top_boundary) { boundary_exceed(); }
+            else { location.y -= speed_y; }
+        }
+        
+        void move_down() 
+        {
+            if (location.y + speed_y > bottom_boundary) {boundary_exceed(); }
+            else { location.y += speed_y; }
+        }
+        
+        // The function receives new boundaries, and sets them as the new boundaries of the fish.
+        void update_boundaries(int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary)
+        {
+            left_boundary = new_left_boundary;
+            right_boundary = new_right_boundary;
+            top_boundary = new_top_boundary;
+            bottom_boundary = new_bottom_boundary;
+        }
+        
+        // The function is being called when an attempt to exceed the boundary occurred.
+        void boundary_exceed() {}
 };
+
+
+class MyFish : public Fish
+{
+    /*
+        Represents the fish of the user.
+    */
+    
+    public:
+    
+        MyFish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary = 0, int new_right_boundary = 0, int new_top_boundary = 0, int new_bottom_boundary = 0, float new_scale = 1, float new_rotation = 0) : Fish(file_path, new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation)
+        {
+        }   
+};
+
+
+// ----- Main Code -----
 
 
 int main()
@@ -245,8 +306,8 @@ int main()
     
     // - Graphics Paths
     const char* path_my_fish = "Textures/my_fish.gif";
-    const char* path_background1 = "Textures/Backgrounds/background1.png";
-    
+    const char* path_world1 = "Textures/Worlds/world1.png";
+   
 	// --- GUI Initialization ---
 	
 	// Screen set-up.
@@ -256,32 +317,56 @@ int main()
 	SetTargetFPS(FPS);
     
     // Load Textures.
-    Texture2D background1 = LoadTexture(path_background1);
-    
+    Texture2D world1 = LoadTexture(path_world1);
+
     // Load Gifs.
-    Fish my_fish = Fish(path_my_fish, Location(150, 150), Size(300, 300), 8, 3);
+    MyFish my_fish = MyFish(path_my_fish, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12);
 	
+    // Create and setup the camera.
+    Camera2D camera = { 0 };
+    camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
+    camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+    camera.rotation = 0;
+    camera.zoom = 0.7;
+    
 	// ----- Game Loop -----
 	
 	// As long as the Esc button or exit button were not pressed, continue to the next frame.
 	while (!WindowShouldClose())
 	{
         
-        // Handle arrow keys strokes.
+        // Set the relevant boundaries for my fish (its scaling considartion occurs within the fish update boundaries).
+        my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2);
+        
+        // Handle arrow keys strokes. They move the fish in the world.
         if (IsKeyDown(KEY_RIGHT)) {my_fish.move_right();}
         if (IsKeyDown(KEY_LEFT)) {my_fish.move_left();}
         if (IsKeyDown(KEY_UP)) {my_fish.move_up();}
         if (IsKeyDown(KEY_DOWN)) {my_fish.move_down();}
         
+        // Camera follows my fish movement.
+        camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
+        
+        // Prepare my fish for the next gif frame.
 		my_fish.set_next_frame();
-
+        
         BeginDrawing();
-
+            
+            // Clear the background.
             ClearBackground(RAYWHITE);
             
-            DrawTexture(background1, 0, 0, WHITE);
+            // Everything inside this scope, is being manipulated by the camera.
+            // Every drawing outside this scope, will show up on the screen without being transformed by the camera.
+            BeginMode2D(camera);
+                
+                // Draw the background.
+                DrawTexture(world1, 0, 0, WHITE);
+
+                // Draw the next gif frame of my fish.
+                my_fish.draw_next_frame();
             
-            my_fish.draw_next_frame();
+            // The end of the drawings affected by the camera.
+            EndMode2D();
 
         EndDrawing();
 	}
