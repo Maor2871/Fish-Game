@@ -82,8 +82,6 @@ int main(void)
             // Clear the background.
             ClearBackground(RAYWHITE);
             
-            // Everything inside this scope, is being manipulated by the camera.
-            // Every drawing outside this scope, will show up on the screen without being transformed by the camera.
             BeginMode2D(camera);
 
                 DrawRectangle(-6000, 320, 13000, 8000, DARKGRAY);
