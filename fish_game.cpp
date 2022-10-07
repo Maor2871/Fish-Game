@@ -154,24 +154,24 @@ class GridEntity : public Entity
         int current_amount_of_cells_within;
 
     public:
-    
-        // The array of cells that the entity is currently within.
-        // cell_within is public due to the "referencing each other" conflic of Cell and GridEntity. The cell that the entity is within directly manipulates cells_witihn from outside this class.
-        Cell* cells_within;
-        
+
+        // The array of cells, as pointers, that the entity is currently within.
+        // cell_within is public due to the "referencing each other" conflic of Cell and GridEntity. The cells that the entity is within, directly manipulates cells_witihn from outside this class.
+        Cell** cells_within;
+
     public:
-    
+
         // Constructor.
-        GridEntity(Location new_location, Size new_size, int new_scale, int new_rotation, int new_max_cells_within, Cell* new_cells_within) : Entity(new_location, new_size, new_scale, new_rotation)
+        GridEntity(Location new_location, Size new_size, int new_scale, int new_rotation, int new_max_cells_within, Cell** new_cells_within) : Entity(new_location, new_size, new_scale, new_rotation)
         {
-            // Save the maximum amount of cells might be in.
+            // Save the maximum amount of cells might be within.
             max_cells_within = new_max_cells_within; 
             
-            // Create the cells array.
+            // Create the cells array. Its length is exactly max_cells_within.
             cells_within = new_cells_within;
             
-            // Currently within no cells.
-            current_amount_of_cells_within = 0;
+            // Not on the grid yet on initialization.
+            current_amount_of_cells_within = 0;           
         }
         
         // Defalut constructor.
@@ -181,19 +181,19 @@ class GridEntity : public Entity
             cells_within = NULL;
             current_amount_of_cells_within = 0;
         }
-        
+
         // The function returns the rectangular frame of the entity as a rectangle (NOT CONSIDERING ROTATION).
         Rectangle get_updated_rectangular_frame()
         {
             // Calculate the frame considering the scale of the entity.
             rectangular_frame = {location.x - ((scale * size.width) / 2), location.y - ((scale * size.height) / 2), scale * size.width, scale * size.height};
-            
+
             // Return the frame as rectangle.
             return rectangular_frame;
         }
         
         // The function returns the array of cells that the entity is currently within.
-        Cell* get_cells_within() { return cells_within; }
+        Cell** get_cells_within() { return cells_within; }
         
         // The function returns the amount of cells curretnly within.
         int get_amount_of_cells_within() { return current_amount_of_cells_within; }
@@ -204,8 +204,8 @@ class GridEntity : public Entity
         // The function is being called when a cell was added to cells_within.
         void cell_within_was_added() { current_amount_of_cells_within++; }
         
-        // The function is being called when another GridEntity has collided with the current one.
-        void handle_collision(GridEntity entity) {}
+        // A GridEntity object might want to handle collision in its original class and not as an GridEntity.
+        virtual void handle_collision(GridEntity* colided_with_entity) {}
 };
 
 
@@ -224,12 +224,12 @@ class Cell
         int entities_counter;
         
         // All the entities within the current cell, as pointers.
-        GridEntity* entities;
+        GridEntity** entities;
         
     public:
         
         // Constructor.
-        Cell(int new_max_entities, GridEntity* new_entities)
+        Cell(int new_max_entities, GridEntity** new_entities)
         {
             // Set the maximum amount of entities the cell can contain.
             max_entities = new_max_entities;
@@ -250,31 +250,34 @@ class Cell
         }
        
         // Add new entity to the cell.
-        void add_entity(GridEntity new_entity)
+        void add_entity(GridEntity* new_entity)
         {
             // Add the entity to the cell.
             entities[entities_counter] = new_entity;
             entities_counter += 1;
-            
+
             // Add the cell to the entity.
-            new_entity.cells_within[new_entity.get_amount_of_cells_within()] = *this;
-            new_entity.cell_within_was_added();
+            new_entity -> cells_within[new_entity -> get_amount_of_cells_within()] = this;
+            new_entity -> cell_within_was_added();
         }
         
         // Remove received entity from the cell.
-        void remove_entity(GridEntity entity_to_remove)
+        void remove_entity(GridEntity* entity_to_remove)
         {
             // Find the received entity in the entities array.
             for (int i = 0; i < entities_counter; i++)
             {
                 // Check if the current entity is the entity to remove.
-                if (&entity_to_remove == &entities[i])
+                if (entity_to_remove == entities[i])
                 {
                     // Overide the current entity with the entity at the end of the array.
                     entities[i] = entities[entities_counter - 1];
                     
                     // Free the entity at the end of the array.
                     entities_counter -= 1;
+                    
+                    // That's it.
+                    break;
                 }
             }
         }
@@ -283,7 +286,7 @@ class Cell
         int get_entities_counter() { return entities_counter; }
         
         // The function returns all the entities in the cell.
-        GridEntity* get_entities() { return entities; }
+        GridEntity** get_entities() { return entities; }
 };
 
 
@@ -291,9 +294,6 @@ class Grid
 {
     /*
         The grid reduces significantly the amount of collision checks in the world.
-        
-        Notes:
-            - All the entities refering inside the class are expected to be GridEntity.
     */
     
     private:
@@ -319,8 +319,8 @@ class Grid
         // The height of each cell in pixels.
         int cell_height_pixels;
         
-        // An 2d matrix with the cells of the grid.
-        Cell** cells;
+        // An 2d matrix with the cells of the grid, as pointers.
+        Cell*** cells;
       
     public:
     
@@ -343,31 +343,41 @@ class Grid
             cell_maximum_amount_of_entities = new_cell_maximum_amount_of_entities;
               
             // Declare the cells matrix.
-            cells = new Cell*[rows_amount];
+            cells = new Cell**[rows_amount];
             for(int i = 0; i < rows_amount; i++)
-                cells[i] = new Cell[columns_amount];
+                cells[i] = new Cell*[columns_amount];
             
             // Create the cells of the grid.
             for (int row_index = 0; row_index < rows_amount; row_index++)
             {
                 for (int column_index = 0; column_index < columns_amount; column_index++)
                 {
-                    cells[row_index][column_index] = Cell(cell_maximum_amount_of_entities, new GridEntity[cell_maximum_amount_of_entities]);
+                    cells[row_index][column_index] = new Cell(cell_maximum_amount_of_entities, new GridEntity*[cell_maximum_amount_of_entities]);
                 }
             }
         }
         
+        // The function receives an entity and refresh it location on the grid.
+        void refresh_entity(GridEntity* entity_to_refresh)
+        {
+            // Remove it from the grid.
+            remove_entity(entity_to_refresh);
+            
+            // Add it to the grid.
+            add_entity(entity_to_refresh);
+        }
+        
         // The function receives an entity and adds it to the grid.
-        void add_entity(GridEntity new_entity)
+        void add_entity(GridEntity* new_entity)
         {
             /*
                 The rectangles are not rotated. 
                 This fact means that a rectangle is within a cell, if and only if the cell is between the y axis boundaries of the rectangle, as well as the x axis boundaries.
             */
             // Get the location and size of the entity.
-            Location location = new_entity.get_location();
-            Size size = new_entity.get_size();
-            int scale = new_entity.get_scale();
+            Location location = new_entity -> get_location();
+            Size size = new_entity -> get_size();
+            int scale = new_entity -> get_scale();
             
             // Calculate the current actual size of the entity.
             int width = scale * size.width;
@@ -401,35 +411,35 @@ class Grid
             
             if (right_column_index_boundary >= columns_amount) { right_column_index_boundary = columns_amount - 1; }
             else if (right_column_index_boundary < 0) { right_column_index_boundary = 0; }
-            
+
             // Add the entity to all the cells within those boundaries.
             for (int row_index = top_row_index_boundary; row_index <= bottom_row_index_boundary; row_index++)
             {
                 for(int col_index = left_column_index_boundary; col_index <= right_column_index_boundary; col_index++)
                 {
                     // Add the entity to the current cell (also adds the cell to the current entity).
-                    cells[row_index][col_index].add_entity(new_entity);
+                    cells[row_index][col_index] -> add_entity(new_entity);
                 }
             }
         }
         
         // The function removes an entity from the grid.
-        void remove_entity(GridEntity entity_to_remove)
+        void remove_entity(GridEntity* entity_to_remove)
         {
             // How many cells the entity is currently within.
-            int amount_of_cells_within = entity_to_remove.get_amount_of_cells_within();
+            int amount_of_cells_within = entity_to_remove -> get_amount_of_cells_within();
             
             // Get the list of cells that the entity is currently within.
-            Cell* cells_within = entity_to_remove.get_cells_within();
-            
+            Cell** cells_within = entity_to_remove -> get_cells_within();
+
             // Iterate over the cells within.
             for (int i = 0; i < amount_of_cells_within; i++)
             {
-                cells_within[i].remove_entity(entity_to_remove);
+                cells_within[i] -> remove_entity(entity_to_remove);
             }
             
             // Reset the cells within of the entity to remove.
-            entity_to_remove.reset_cells_within();
+            entity_to_remove -> reset_cells_within();
         }
         
         // The function returns the amount of columns.
@@ -439,7 +449,7 @@ class Grid
         int get_rows_amount() { return rows_amount; }
         
         // Returns the cells matrix.
-        Cell** get_cells() { return cells; }
+        Cell*** get_cells() { return cells; }
 };
 
 
@@ -450,10 +460,10 @@ class MyGif: public GridEntity
         
         Notes:
             - The gif is loaded as a texture, and manipulated as a texture.
-            - The gif doesn't have to be on a grid, an almost identical MyGif class is spared due to unnecessary code overload. Simply the value of max_cells_within can be ignored.
+            - The gif doesn't have to be on a grid, an almost identical MyGif class is spared due to unnecessary code overload. Simply the value of max_cells_within can be ignored and the array    
+              cells_within should be nothing but a null pointer.
     */
     
-    // Define the protected attributes.
     protected:
     
         // The path to the gif.
@@ -480,13 +490,11 @@ class MyGif: public GridEntity
         // The gif as texture.
         Texture2D my_gif_texture;
     
-    // Define the public methods.
     public:
     
         // Constructor.
-        MyGif(const char* new_file_path, Location new_location, Size new_size, int new_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* new_cells_within) : GridEntity(new_location, new_size, new_scale, new_rotation, new_max_cells_within, new_cells_within)
+        MyGif(const char* new_file_path, Location new_location, Size new_size, int new_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : GridEntity(new_location, new_size, new_scale, new_rotation, new_max_cells_within, new_cells_within)
         {
-
             // Save the path to the gif file.
             file_path = new_file_path;
             
@@ -507,15 +515,13 @@ class MyGif: public GridEntity
             my_gif_texture = LoadTextureFromImage(my_gif_image); 
         }
         
+        // Flipping manipulations
         void flip_horizontal() {is_facing_left_on_startup ? is_flip_horizontal = false : is_flip_horizontal = true;}
-        
         void flip_vertical() {is_flip_vertical = true;}
-        
         void unflip_horizontal() {is_facing_left_on_startup ? is_flip_horizontal = true : is_flip_horizontal = false;}
-        
         void unflip_vertical() {is_flip_vertical = false;}
         
-        // The function displays the next frame of the gif.
+        // The function Prepare the next frame of the gif.
         void set_next_frame()
         {
             // Containing required data about the next frame.
@@ -534,6 +540,7 @@ class MyGif: public GridEntity
             UpdateTexture(my_gif_texture, ((unsigned char *) my_gif_image.data) + next_frame_data_offset);
         }
         
+        // The function draws the last frame that was set with set_next_frame().
         void draw_next_frame()
         {
             // -1 cause flip, 1 do not flips.
@@ -546,16 +553,16 @@ class MyGif: public GridEntity
             // Crop the gif (we don't want to crop any gif, so just take its original frame).
             Rectangle source = {0, 0, flip_width * my_gif_texture.width, flip_height * my_gif_texture.height};
             
-            // Were to draw the gif. The input location is where to put the center on the screen.
+            // Where to draw the gif. The input location is where to put the center on the screen.
             Rectangle destination = {location.x, location.y, scale * size.width, scale * size.width};
             
             // We want the gif to be rotated in relation to its center, and we want that the inputed location in the destination rectangle will be the center.
             Vector2 center = {size.width / 2, size.width / 2};
             
-            // Draw the texture.
+            // Draw the next frame of the gif properly.
             DrawTexturePro(my_gif_texture, source, destination, center, rotation, WHITE);
         }
-    
+
         // The function removes the gif from the screen.
         void delete_gif()
         {
@@ -565,7 +572,8 @@ class MyGif: public GridEntity
             // Remove the image.
             UnloadImage(my_gif_image); 
         }
-
+        
+        // Returns the center location of the gif.
         Location get_location() {return location;}
 };
 
@@ -590,9 +598,8 @@ class Fish : public MyGif
     public:
         
         // Counstructor.
-        Fish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* new_cells_within) : MyGif(file_path, new_location, new_size, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        Fish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : MyGif(file_path, new_location, new_size, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
-
             // Set the speed of the fish.
             speed_x = new_speed_x;
             speed_y = new_speed_y;
@@ -642,9 +649,9 @@ class Fish : public MyGif
         void boundary_exceed() {}
         
         // The function handles a collision between the fish and another GridEntity.
-        void handle_collision(GridEntity entity)
+        void handle_collision(GridEntity* colided_with_entity)
         {
-            cout << "Horray fish collided!";
+            cout << "\n\nHorray fish collided!\n\n";
         }
 };
 
@@ -657,7 +664,7 @@ class MyFish : public Fish
     
     public:
     
-        MyFish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* new_cells_within) : Fish(file_path, new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        MyFish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
         }
 };
@@ -669,7 +676,6 @@ class WanderFish : public Fish
         Represents a simple fish wandering in the world.
     */
     
-    // Define the private attributes of the wandering fish.
     private:
    
         // The range of speeds the fish can move.
@@ -694,10 +700,8 @@ class WanderFish : public Fish
         
         // Constructor.
         // new_paths_count_in_paths_stack should state the number of stacks which are saved in the received paths_stack.
-        WanderFish(const char* file_path, Location new_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, fish_path* new_paths_stack, int new_paths_count_in_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale,float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* new_cells_within) : Fish(file_path, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        WanderFish(const char* file_path, Location new_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, fish_path* new_paths_stack, int new_paths_count_in_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale,float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
-            // --- Set the available properties values range ---
-
             // Set the range of speeds on both axes.
             min_speed_x = new_min_speed_x;
             max_speed_x = new_max_speed_x;
@@ -800,7 +804,7 @@ int main()
 	const int SCREEN_WIDTH = 1300;
 	const int SCREEN_HEIGHT = 800;
 	const char* SCREEN_TITLE = "The Fish";
-	const int FPS = 24;
+	const int FPS = 30;
     
     // - Graphics Paths
     const char* PATH_MY_FISH = "Textures/my_fish.gif";
@@ -808,7 +812,9 @@ int main()
     const char* PATH_FISH1 = "Textures/Fish/fish1.gif";
     
     // - Game Properties
-    const int FISH_POPULATION = 30; 
+    const int FISH_POPULATION = 30;
+    const int GRID_ROWS = 3;
+    const int GRID_COLS = 5;
    
 	// --- GUI Initialization ---
 	
@@ -820,23 +826,26 @@ int main()
    
     // Load Textures.
     Texture2D world1 = LoadTexture(PATH_WORLD1);
-    Cell* bla_cells_within = new Cell[50];
+
     // Create Entities.
-    MyFish my_fish = MyFish(PATH_MY_FISH, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 0, false, FISH_POPULATION, bla_cells_within);
     
+    // - my fish.
+    Cell** cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
+    MyFish my_fish = MyFish(PATH_MY_FISH, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 0, false, FISH_POPULATION, cells_within_my_fish);
+    
+    // - fish1.
+    Cell** cells_within_fish1 = new Cell*[GRID_ROWS * GRID_COLS];
     fish_path fish1_path = {10, 1, 1, 0, 1000}; 
     fish_path fish1_paths[] = {fish1_path};
-    
-    // temp wander fish.
-    WanderFish fish1 = WanderFish(PATH_FISH1, Location(200, 400), Size(200, 200), 10 , 30, 1, 10, 250, 1000, fish1_paths, 1, 0, 0, 0, 0, 1, 0, true, FISH_POPULATION, bla_cells_within);
+    WanderFish fish1 = WanderFish(PATH_FISH1, Location(200, 400), Size(200, 200), 10 , 30, 1, 10, 250, 1000, fish1_paths, 1, 0, 0, 0, 0, 1, 0, true, FISH_POPULATION, cells_within_fish1);
 
     // Create the grid.
-    Grid grid = Grid(5, 3, FISH_POPULATION, SCREEN_WIDTH, SCREEN_HEIGHT);
+    Grid grid = Grid(GRID_COLS, GRID_ROWS, FISH_POPULATION, world1.width, world1.height);
 
     // Add all the entities to the grid.
-    grid.add_entity(my_fish);
-    grid.add_entity(fish1);
-    
+    grid.add_entity(&my_fish);
+    grid.add_entity(&fish1);
+
     // Create and setup the camera.
     Camera2D camera = { 0 };
     camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
@@ -852,37 +861,40 @@ int main()
         // --- Boundaries Management ---
         
         // Set the relevant boundaries for all the fish (its scaling considartions occurs within the fish update boundaries calls).
-        // Needs to be updated each frame becuase of the scaling change.
+        // Needs to be updated each frame becuase the scaling of the fish can be changed.
         my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2);
         fish1.update_boundaries(-100, world1.width + 100, -100, world1.height + 100);
         
         // --- User Input Management ---
         
         // Handle arrow keys strokes. They move the fish in the world.
-        if (IsKeyDown(KEY_RIGHT)) {my_fish.move_right();}
-        if (IsKeyDown(KEY_LEFT)) {my_fish.move_left();}
-        if (IsKeyDown(KEY_UP)) {my_fish.move_up();}
-        if (IsKeyDown(KEY_DOWN)) {my_fish.move_down();}
+        if (IsKeyDown(KEY_RIGHT)) { my_fish.move_right(); grid.refresh_entity(&my_fish); }
+        if (IsKeyDown(KEY_LEFT)) { my_fish.move_left(); grid.refresh_entity(&my_fish); }
+        if (IsKeyDown(KEY_UP)) { my_fish.move_up(); grid.refresh_entity(&my_fish); }
+        if (IsKeyDown(KEY_DOWN)) { my_fish.move_down(); grid.refresh_entity(&my_fish); }
         
         // --- Entities Calculations ---
         
-        // temp.
+        // Move fish1.
         fish1.move();
+        grid.refresh_entity(&fish1);
         
         // --- Handle Collisions ---
         
         // A reference to the cells array.
-        Cell** grid_cells = grid.get_cells();
+        Cell*** grid_cells = grid.get_cells();
         
         // The amount of entities currently in the current cell.
         int current_cell_entities_amount;
         
         // The entities array of the current cell.
-        GridEntity* entities_in_cell;
+        GridEntity** entities_in_cell;
         
         // The rectangular frame of the two entities in the loop.
         Rectangle first_entity_rectangle;
-        Rectangle second_entity_rectangle;        
+        Rectangle second_entity_rectangle;    
+        
+        //cout << "\nNew frame:\n";
         
         // Iterate over the cells of the grid.
         for (int row_index = 0; row_index < grid.get_rows_amount(); row_index++)
@@ -890,30 +902,39 @@ int main()
             for (int col_index = 0; col_index < grid.get_columns_amount(); col_index++)
             {
                 // Save the amount of entities in the current cell.
-                current_cell_entities_amount = grid_cells[row_index][col_index].get_entities_counter();
-                if (current_cell_entities_amount > 1) { cout << "\nIndeed: " << current_cell_entities_amount << "\n"; }
+                current_cell_entities_amount = grid_cells[row_index][col_index] -> get_entities_counter();
+                
+                /*
+                if (current_cell_entities_amount > 0)
+                {
+                    cout << "--> (" << row_index << ", " << col_index << ") " << current_cell_entities_amount << " entities.\n";
+                }
+                */
+                
                 // Get the array of entities in the cell.
-                entities_in_cell = grid_cells[row_index][col_index].get_entities();
+                entities_in_cell = grid_cells[row_index][col_index] -> get_entities();
                 
                 // Iterate over all the possible entities pairs in the current cell.
-                for (int first_entity_index = 0; first_entity_index < current_cell_entities_amount - 1; first_entity_index++)
+                for (int first_entity_index = 0; first_entity_index < current_cell_entities_amount; first_entity_index++)
                 {
                     for (int second_entity_index = first_entity_index + 1; second_entity_index < current_cell_entities_amount; second_entity_index++)
                     {
                         // Get the rectangle frame of the two entities.
-                        first_entity_rectangle = entities_in_cell[first_entity_index].get_updated_rectangular_frame();
-                        second_entity_rectangle = entities_in_cell[second_entity_index].get_updated_rectangular_frame();
+                        first_entity_rectangle = entities_in_cell[first_entity_index] -> get_updated_rectangular_frame();
+                        second_entity_rectangle = entities_in_cell[second_entity_index] -> get_updated_rectangular_frame();
                         
                         // Check if the two current entities are overlapping.
                         if (CheckCollisionRecs(first_entity_rectangle, second_entity_rectangle))
                         {
-                            // The beauty of overloading.
-                            entities_in_cell[first_entity_index].handle_collision(entities_in_cell[second_entity_index]);
+                            // Tell the first entity it collided with the second entity.
+                            entities_in_cell[first_entity_index] -> handle_collision(entities_in_cell[second_entity_index]);
                         }
                     }
                 }
             }
         }
+        
+        //cout << "End of frame.\n";
         
         // --- Camera ---
         
@@ -923,9 +944,7 @@ int main()
         // --- Prepare Gifs for drawing ---
         
         // Prepare my fish for the next gif frame.
-		my_fish.set_next_frame();
-        
-        // temp.
+		my_fish.set_next_frame();        
         fish1.set_next_frame();
         
         // --- Draw ---
@@ -942,9 +961,8 @@ int main()
                 // Draw the background.
                 DrawTexture(world1, 0, 0, WHITE);
 
-                // Draw the next gif frame of my fish.
+                // Draw the next gif frame of the fish.
                 my_fish.draw_next_frame();
-                
                 fish1.draw_next_frame();
             
             // The end of the drawings affected by the camera.
