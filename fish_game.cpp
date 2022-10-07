@@ -112,6 +112,15 @@ class Entity
             rotation = new_rotation;
         }
         
+        // Default constructor.
+        Entity()
+        {
+            location = Location(0, 0);
+            size = Size(0, 0);
+            scale = 0;
+            rotation = 0;
+        }
+        
         // Getters.
         Location get_location() { return location; }
         Size get_size() { return size; }
@@ -143,21 +152,33 @@ class GridEntity : public Entity
         
         // The amount of cells currently within.
         int current_amount_of_cells_within;
-        
-        // The array of cells that the entity is currently within. The counstructor is expecting to receive an emty cells array in the size of max_cells_within.
+
+    public:
+    
+        // The array of cells that the entity is currently within.
+        // cell_within is public due to the "referencing each other" conflic of Cell and GridEntity. The cell that the entity is within directly manipulates cells_witihn from outside this class.
         Cell* cells_within;
         
     public:
     
-        GridEntity(Location new_location, Size new_size, int new_scale, int new_rotation, int new_max_cells_within, Cell* cells_within) : Entity(new_location, new_size, new_scale, new_rotation)
+        // Constructor.
+        GridEntity(Location new_location, Size new_size, int new_scale, int new_rotation, int new_max_cells_within, Cell* new_cells_within) : Entity(new_location, new_size, new_scale, new_rotation)
         {
             // Save the maximum amount of cells might be in.
             max_cells_within = new_max_cells_within; 
             
             // Create the cells array.
-            cells_within = cells_within;
+            cells_within = new_cells_within;
             
             // Currently within no cells.
+            current_amount_of_cells_within = 0;
+        }
+        
+        // Defalut constructor.
+        GridEntity() : Entity()
+        {
+            max_cells_within = 0;
+            cells_within = NULL;
             current_amount_of_cells_within = 0;
         }
         
@@ -180,8 +201,11 @@ class GridEntity : public Entity
         // The function resets the array indicating the cells in which the entity is currently in.
         void reset_cells_within() { current_amount_of_cells_within = 0;}
         
-        // The function receives a cell and adds it to the array of cells that the entity is currently within.
-        void add_cell_within(Cell* new_cell_within) { cells_within[current_amount_of_cells_within] = new_cell_within; current_amount_of_cells_within++; }
+        // The function is being called when a cell was added to cells_within.
+        void cell_within_was_added() { current_amount_of_cells_within++; }
+        
+        // The function is being called when another GridEntity has collided with the current one.
+        void handle_collision(GridEntity entity) {}
 };
 
 
@@ -205,23 +229,36 @@ class Cell
     public:
         
         // Constructor.
-        Cell(int new_max_entities)
+        Cell(int new_max_entities, GridEntity* new_entities)
         {
             // Set the maximum amount of entities the cell can contain.
-            max_entities = new_max_entities
+            max_entities = new_max_entities;
             
-            // Create the entities pointers array.
-            entities = new Entity[max_entities];
+            // Initialize the entities array with the size of max_entities.
+            entities = new_entities;
             
             // Currently there are 0 entities in the cell.
             entities_counter = 0;
         }
         
-        // Add new entity to the cell.
-        void add_entity(Entity new_entity)
+        // Default constructor.
+        Cell()
         {
+            max_entities = 0;
+            entities = NULL;
+            entities_counter=0;
+        }
+       
+        // Add new entity to the cell.
+        void add_entity(GridEntity new_entity)
+        {
+            // Add the entity to the cell.
             entities[entities_counter] = new_entity;
             entities_counter += 1;
+            
+            // Add the cell to the entity.
+            new_entity.cells_within[new_entity.get_amount_of_cells_within()] = *this;
+            new_entity.cell_within_was_added();
         }
         
         // Remove received entity from the cell.
@@ -231,13 +268,12 @@ class Cell
             for (int i = 0; i < entities_counter; i++)
             {
                 // Check if the current entity is the entity to remove.
-                if (entity_to_remove == entities[i])
+                if (&entity_to_remove == &entities[i])
                 {
                     // Overide the current entity with the entity at the end of the array.
                     entities[i] = entities[entities_counter - 1];
                     
                     // Free the entity at the end of the array.
-                    entities[entities_counter - 1] = NULL;
                     entities_counter -= 1;
                 }
             }
@@ -247,7 +283,7 @@ class Cell
         int get_entities_counter() { return entities_counter; }
         
         // The function returns all the entities in the cell.
-        GridEntity* get_entities() { return entites; }
+        GridEntity* get_entities() { return entities; }
 };
 
 
@@ -284,7 +320,7 @@ class Grid
         int cell_height_pixels;
         
         // An 2d matrix with the cells of the grid.
-        Cell* cells;
+        Cell** cells;
       
     public:
     
@@ -305,16 +341,18 @@ class Grid
             
             // Save the maximum amount of entites a single cell can contain.
             cell_maximum_amount_of_entities = new_cell_maximum_amount_of_entities;
-            
+              
             // Declare the cells matrix.
-            cells = new Cell[rows_amount][columns_amount];
+            cells = new Cell*[rows_amount];
+            for(int i = 0; i < rows_amount; i++)
+                cells[i] = new Cell[columns_amount];
             
             // Create the cells of the grid.
             for (int row_index = 0; row_index < rows_amount; row_index++)
             {
                 for (int column_index = 0; column_index < columns_amount; column_index++)
                 {
-                    cells[row_index][column_index] = Cell(cell_maximum_amount_of_entities);
+                    cells[row_index][column_index] = Cell(cell_maximum_amount_of_entities, new GridEntity[cell_maximum_amount_of_entities]);
                 }
             }
         }
@@ -351,16 +389,26 @@ class Grid
             int top_row_index_boundary = (int) ceil( (double) y_boundary_top / cell_height_pixels);
             int bottom_row_index_boundary = (int) ceil( (double) y_boundary_bottom / cell_height_pixels);
             
+            // Don't care if outside the grid.
+            if (top_row_index_boundary >= rows_amount) { top_row_index_boundary = rows_amount - 1; }
+            else if (top_row_index_boundary < 0) { top_row_index_boundary = 0; }
+            
+            if (bottom_row_index_boundary < 0) { bottom_row_index_boundary = 0; }
+            else if (bottom_row_index_boundary >= rows_amount) { bottom_row_index_boundary = rows_amount - 1; }
+            
+            if (left_column_index_boundary < 0) { left_column_index_boundary = 0; }
+            else if (left_column_index_boundary >= columns_amount) { left_column_index_boundary = columns_amount - 1; }
+            
+            if (right_column_index_boundary >= columns_amount) { right_column_index_boundary = columns_amount - 1; }
+            else if (right_column_index_boundary < 0) { right_column_index_boundary = 0; }
+            
             // Add the entity to all the cells within those boundaries.
             for (int row_index = top_row_index_boundary; row_index <= bottom_row_index_boundary; row_index++)
             {
                 for(int col_index = left_column_index_boundary; col_index <= right_column_index_boundary; col_index++)
                 {
-                    // Add the entity to the current cell.
+                    // Add the entity to the current cell (also adds the cell to the current entity).
                     cells[row_index][col_index].add_entity(new_entity);
-                    
-                    // Save a reference of the current cell in the entity.
-                    new_entity.add_cell_within(cells[row_index][col_index]);
                 }
             }
         }
@@ -391,7 +439,7 @@ class Grid
         int get_rows_amount() { return rows_amount; }
         
         // Returns the cells matrix.
-        Cells* get_cells() { return cells; }
+        Cell** get_cells() { return cells; }
 };
 
 
@@ -428,7 +476,7 @@ class MyGif: public GridEntity
         
         // The gif as image.
         Image my_gif_image;
-        
+
         // The gif as texture.
         Texture2D my_gif_texture;
     
@@ -436,7 +484,7 @@ class MyGif: public GridEntity
     public:
     
         // Constructor.
-        MyGif(const char* new_file_path, Location new_location, Size new_size, int new_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* cells_within) : GridEntity(new_location, new_size, new_scale, new_rotation, max_cells_within, cells_within)
+        MyGif(const char* new_file_path, Location new_location, Size new_size, int new_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* new_cells_within) : GridEntity(new_location, new_size, new_scale, new_rotation, new_max_cells_within, new_cells_within)
         {
 
             // Save the path to the gif file.
@@ -448,7 +496,7 @@ class MyGif: public GridEntity
             // Set the texture on initialization to face right.
             if (is_facing_left_on_startup) { is_flip_horizontal = true; }
             else { is_flip_horizontal = false; }
-            
+
             // Do not flip the texture verticaly on initialization.
             is_flip_vertical = false;
 
@@ -456,7 +504,7 @@ class MyGif: public GridEntity
             my_gif_image = LoadImageAnim(file_path, &frames_amount);
 
             // Create the texture instance.
-            my_gif_texture = LoadTextureFromImage(my_gif_image);   
+            my_gif_texture = LoadTextureFromImage(my_gif_image); 
         }
         
         void flip_horizontal() {is_facing_left_on_startup ? is_flip_horizontal = false : is_flip_horizontal = true;}
@@ -509,7 +557,7 @@ class MyGif: public GridEntity
         }
     
         // The function removes the gif from the screen.
-        void delte_gif()
+        void delete_gif()
         {
             // Remove the texture.
             UnloadTexture(my_gif_texture);
@@ -542,7 +590,7 @@ class Fish : public MyGif
     public:
         
         // Counstructor.
-        Fish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* cells_within) : MyGif(file_path, new_location, new_size, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, cells_within)
+        Fish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* new_cells_within) : MyGif(file_path, new_location, new_size, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
 
             // Set the speed of the fish.
@@ -592,6 +640,12 @@ class Fish : public MyGif
         
         // The function is being called when an attempt to exceed the boundary occurred.
         void boundary_exceed() {}
+        
+        // The function handles a collision between the fish and another GridEntity.
+        void handle_collision(GridEntity entity)
+        {
+            cout << "Horray fish collided!";
+        }
 };
 
 
@@ -603,7 +657,7 @@ class MyFish : public Fish
     
     public:
     
-        MyFish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* cells_within) : Fish(file_path, new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, cells_within)
+        MyFish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* new_cells_within) : Fish(file_path, new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
         }
 };
@@ -640,7 +694,7 @@ class WanderFish : public Fish
         
         // Constructor.
         // new_paths_count_in_paths_stack should state the number of stacks which are saved in the received paths_stack.
-        WanderFish(const char* file_path, Location new_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, fish_path* new_paths_stack, int new_paths_count_in_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale,float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* cells_within) : Fish(file_path, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, cells_within)
+        WanderFish(const char* file_path, Location new_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, fish_path* new_paths_stack, int new_paths_count_in_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale,float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell* new_cells_within) : Fish(file_path, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // --- Set the available properties values range ---
 
@@ -733,18 +787,6 @@ class WanderFish : public Fish
 };
 
 
-// ----- Game Functions -----
-
-
-// --- Handle collisions ---
-
-// The function handles a collision between to fish.
-void handle_collision(Fish fish1, Fish fish2)
-{
-    cout << "Horray fish collided!";
-}
-
-
 // ----- Main Code -----
 
 
@@ -775,22 +817,22 @@ int main()
 	
 	// Fps declaration.
 	SetTargetFPS(FPS);
-    
+   
     // Load Textures.
     Texture2D world1 = LoadTexture(PATH_WORLD1);
-    
-    // Create the grid.
-    Grid grid = Grid(5, 3, FISH_POPULATION, SCREEN_WIDTH, SCREEN_HEIGHT);
-
+    Cell* bla_cells_within = new Cell[50];
     // Create Entities.
-    MyFish my_fish = MyFish(PATH_MY_FISH, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 0, false, FISH_POPULATION, & (new Cell[FISH_POPULATION]));
+    MyFish my_fish = MyFish(PATH_MY_FISH, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 0, false, FISH_POPULATION, bla_cells_within);
     
-    fish_path fish1_path = {10, 1, 1, 1, 1000}; 
+    fish_path fish1_path = {10, 1, 1, 0, 1000}; 
     fish_path fish1_paths[] = {fish1_path};
     
     // temp wander fish.
-    WanderFish fish1 = WanderFish(PATH_FISH1, Location(200, 400), Size(200, 200), 10 , 30, 1, 10, 250, 1000, fish1_paths, 1, 0, 0, 0, 0, 1, 0, true, FISH_POPULATION, & (new Cell[FISH_POPULATION]));
-    
+    WanderFish fish1 = WanderFish(PATH_FISH1, Location(200, 400), Size(200, 200), 10 , 30, 1, 10, 250, 1000, fish1_paths, 1, 0, 0, 0, 0, 1, 0, true, FISH_POPULATION, bla_cells_within);
+
+    // Create the grid.
+    Grid grid = Grid(5, 3, FISH_POPULATION, SCREEN_WIDTH, SCREEN_HEIGHT);
+
     // Add all the entities to the grid.
     grid.add_entity(my_fish);
     grid.add_entity(fish1);
@@ -830,7 +872,7 @@ int main()
         // --- Handle Collisions ---
         
         // A reference to the cells array.
-        Cell* grid_cells = grid.get_cells();
+        Cell** grid_cells = grid.get_cells();
         
         // The amount of entities currently in the current cell.
         int current_cell_entities_amount;
@@ -848,10 +890,10 @@ int main()
             for (int col_index = 0; col_index < grid.get_columns_amount(); col_index++)
             {
                 // Save the amount of entities in the current cell.
-                current_cell_entities_amount = grid_cells[row_index][column_index].get_entities_counter();
-                
+                current_cell_entities_amount = grid_cells[row_index][col_index].get_entities_counter();
+                if (current_cell_entities_amount > 1) { cout << "\nIndeed: " << current_cell_entities_amount << "\n"; }
                 // Get the array of entities in the cell.
-                entities_in_cell = grid_cells[row_index][column_index].get_entities();
+                entities_in_cell = grid_cells[row_index][col_index].get_entities();
                 
                 // Iterate over all the possible entities pairs in the current cell.
                 for (int first_entity_index = 0; first_entity_index < current_cell_entities_amount - 1; first_entity_index++)
@@ -866,7 +908,7 @@ int main()
                         if (CheckCollisionRecs(first_entity_rectangle, second_entity_rectangle))
                         {
                             // The beauty of overloading.
-                            handle_collision(entities_in_cell[first_entity_index], entities_in_cell[second_entity_index])
+                            entities_in_cell[first_entity_index].handle_collision(entities_in_cell[second_entity_index]);
                         }
                     }
                 }
@@ -913,7 +955,8 @@ int main()
 	
 	// ----- Close Game -----
 	
-    my_fish.delte_gif();
+    my_fish.delete_gif();
+    fish1.delete_gif();
     
 	// Close the game screen.
 	CloseWindow();
