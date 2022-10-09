@@ -6,20 +6,7 @@
 using namespace std;
 
 
-// ----- Structues -----
-
-
-struct fish_path
-{
-    int speed_x;
-    int speed_y;
-    int is_moving_right;
-    int is_moving_top;
-    int current_frames_left;
-};
-
-
-// ----- Grahphics Classes -----
+// ----- Basice Graphics classes -----
 
 
 class Location
@@ -127,6 +114,73 @@ class Entity
         int get_scale() { return scale; }
         int get_rotation() { return rotation; }
 };
+
+
+// ----- Structues -----
+
+
+// A description of a path.
+struct fish_path
+{
+    int speed_x;
+    int speed_y;
+    int is_moving_right;
+    int is_moving_top;
+    int current_frames_left;
+};
+
+// A fish_path stack.
+struct paths_stack
+{
+    // The initial location of the stack.
+    Location initial_location;
+    
+    // How many paths in the stack.
+    int length;
+    
+    // An array of the paths.
+    fish_path* paths;
+    
+    // If true the path repeats itself.
+    bool is_repeat;
+    
+    // Flags for the initial location.
+    bool is_initial_location;
+    bool is_left;
+};
+
+// Fish recipe.
+struct fish_profile
+{
+    // - Basic properties.
+    
+    const char* file_path;
+    bool is_facing_left_on_startup;
+    Size size;
+    int max_scaling;
+    float min_speed_x;
+    float max_speed_x;
+    float min_speed_y;
+    float max_speed_y;
+    int min_frames_per_path;
+    int max_frames_per_path;
+    
+    // - Possible paths stacks
+    
+    // The amount of paths stacks in the paths stacks array.
+    int paths_stacks_amount;
+    
+    // An array of possible paths stacks.
+    paths_stack* paths_stacks;    
+
+    // - Flags
+    
+    // Indicates on the rarity of the fish. Try to avoid too large numbers. Do not use accuracy greater than 4 points after the decimal point.
+    float proportion;   
+};
+
+
+// ----- Advanced Grahphics Classes -----
 
 
 // Declare on cells before grid entity (Resolves the deadlock of Cell includes GridEntity and GridEntity includes Cell).
@@ -442,14 +496,17 @@ class Grid
             entity_to_remove -> reset_cells_within();
         }
         
+        // Getters.
+
         // The function returns the amount of columns.
         int get_columns_amount() { return columns_amount; }
         
         // The function returns the amount of rows.
         int get_rows_amount() { return rows_amount; }
-        
+
         // Returns the cells matrix.
         Cell*** get_cells() { return cells; }
+
 };
 
 
@@ -512,7 +569,7 @@ class MyGif: public GridEntity
             my_gif_image = LoadImageAnim(file_path, &frames_amount);
 
             // Create the texture instance.
-            my_gif_texture = LoadTextureFromImage(my_gif_image); 
+            my_gif_texture = LoadTextureFromImage(my_gif_image);
         }
         
         // Flipping manipulations
@@ -581,6 +638,10 @@ class MyGif: public GridEntity
 // ----- Game Classes -----
 
 
+// Need to declare for the Fish class.
+class FishNetwork;
+
+
 class Fish : public MyGif
 {
     /*
@@ -594,6 +655,9 @@ class Fish : public MyGif
         
         // The location boundaries of the fish.
         int left_boundary, right_boundary, top_boundary, bottom_boundary;
+        
+        // Relevant if the fish is a part of a network.
+        FishNetwork* network;
        
     public:
         
@@ -609,7 +673,12 @@ class Fish : public MyGif
             right_boundary = new_right_boundary;
             top_boundary = new_top_boundary;
             bottom_boundary = new_bottom_boundary;
+            
+            // On startup set the network to NULL.
+            network = NULL;
         }
+        
+        void set_network(FishNetwork* new_network) { network = new_network; }
         
         // Apply movements (including boundaries check).
         void move_left() 
@@ -646,7 +715,21 @@ class Fish : public MyGif
         }
         
         // The function is being called when an attempt to exceed the boundary occurred.
-        void boundary_exceed() {}
+        void boundary_exceed() 
+        {
+            // Tell the network of the fish, if exists, that the fish is gone.
+            //if (network != NULL)
+            //    network -> delete_fish(this);
+            
+            delete_fish();
+        }
+        
+        // The function deletes the fish from the world.
+        // If the gif is not a part of a network, it is required to manualy remove it from the grid.
+        void delete_fish()
+        {
+            delete_gif();
+        }
         
         // The function handles a collision between the fish and another GridEntity.
         void handle_collision(GridEntity* colided_with_entity)
@@ -677,30 +760,34 @@ class WanderFish : public Fish
     */
     
     private:
-   
-        // The range of speeds the fish can move.
-        float min_speed_x, max_speed_x, min_speed_y, max_speed_y;
-        
+
         // The range of steps (frames) for a new generated path.
         int min_path_frames, max_path_frames;
-        
-        // How many paths left in the paths_stack.
-        int path_count_in_paths_stack;
-        
+
         // The index on the next path in paths stack.
         int paths_stack_index;
         
         // The current path of the fish.
         fish_path current_path;
         
+        // Indicating the orginal frames amount the current path had, necessary for later reset (relevant only with paths_stack, repeat on).
+        int current_path_original_frames_amount;
+        
         // The paths stack of the current wandering fish.
-        fish_path* paths_stack;
+        paths_stack my_paths_stack;
+        
+        // The range of speeds in both axes.
+        int min_speed_x;
+        int max_speed_x;
+        int min_speed_y;
+        int max_speed_y;
    
     public:
         
         // Constructor.
         // new_paths_count_in_paths_stack should state the number of stacks which are saved in the received paths_stack.
-        WanderFish(const char* file_path, Location new_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, fish_path* new_paths_stack, int new_paths_count_in_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale,float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        // The location is relevant if there is no paths_stack or is_initial_location is false;
+        WanderFish(const char* file_path, Location new_location, bool is_initial_left_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // Set the range of speeds on both axes.
             min_speed_x = new_min_speed_x;
@@ -713,18 +800,56 @@ class WanderFish : public Fish
             max_path_frames = new_max_path_frames;
             
             // Set the paths stack, and save the number of elements in it.
-            paths_stack = new_paths_stack;
-            path_count_in_paths_stack = new_paths_count_in_paths_stack;
+            my_paths_stack = new_paths_stack;
             paths_stack_index = 0;
             
             // If there are paths in stack path, pull out the first one to be the current path.
-            if (path_count_in_paths_stack > 0) { current_path = paths_stack[0]; }
+            if (my_paths_stack.length > 0) 
+            {
+                // If initial location is relevant.
+                if (my_paths_stack.is_initial_location) { location.set_location(my_paths_stack.initial_location); }
+                
+                // Otherwise, randomize it.
+                else { set_random_initial_location(is_initial_left_location); }
+                
+                // Set the first path as the current path.
+                current_path = my_paths_stack.paths[0];
+                
+                // Remember the original amount of frames.
+                current_path_original_frames_amount = current_path.current_frames_left;
+            }
             
             // Otherwise, generate new path and assign it.
-            else { current_path = generate_new_path(); }
+            else 
+            {
+                current_path = generate_new_path();
+                
+                set_random_initial_location(is_initial_left_location);
+            }
             
             // Update the properties of the wander fish to match the properties of the current path.
             match_path_in_fish();
+        }
+        
+        // The function sets a random initial_location.
+        void set_random_initial_location(bool is_initial_left_location)
+        {
+            // Randomize the location of the y axis.
+            int y_coordinates;
+            if (bottom_boundary - top_boundary <= 0) { y_coordinates = top_boundary + size.height; }
+            else { y_coordinates = rand() % (bottom_boundary - top_boundary) + top_boundary; }
+            
+            // The location should be at the left side of the world.
+            if (is_initial_left_location)
+            {
+                location.set_location(Location(left_boundary + size.width, y_coordinates));
+            }
+            
+            // The location should be at the right side of the world.
+            else
+            {
+                location.set_location(Location(right_boundary - size.width, y_coordinates));
+            }
         }
         
         // The function generates the next move of the wandering fish.
@@ -744,21 +869,57 @@ class WanderFish : public Fish
             }
             
             // No frames left, need to load new path. Check if there are more paths in the paths stack.
-            else if (path_count_in_paths_stack > 0)
+            else if (paths_stack_index < my_paths_stack.length - 1)
             {
+                
+                // First reset the current path for later use.
+                my_paths_stack.paths[paths_stack_index].current_frames_left = current_path_original_frames_amount;
+                
+                // Point on the next path.
+                paths_stack_index++;
+
                 // Load the next path.
-                current_path = paths_stack[paths_stack_index];
+                current_path = my_paths_stack.paths[paths_stack_index];
                 match_path_in_fish();
                 
-                // Update the paths counter.
-                path_count_in_paths_stack -= 1;
-                
-                // Now make a move with the current path.
+                // Save its original frames amount for later reset.
+                current_path_original_frames_amount = current_path.current_frames_left;
+
+                // Make a move with the current path.
                 move();
             }
             
-            // No paths left in the paths stack. Generate new one.
-            else { current_path = generate_new_path(); match_path_in_fish(); move(); }
+            // No paths left in the paths stack.
+            else 
+            {
+                // Check if the paths stack is set to repeat.
+                if (my_paths_stack.is_repeat)
+                {                   
+                    // First reset the current path for later use.
+                    my_paths_stack.paths[paths_stack_index].current_frames_left = current_path_original_frames_amount;
+                    
+                    // Reset the paths stack index.
+                    paths_stack_index = 0;
+                    
+                    // Load the next path.
+                    current_path = my_paths_stack.paths[paths_stack_index];
+                    match_path_in_fish();
+
+                    // Save its original amount of frames for later reset.
+                    current_path_original_frames_amount = current_path.current_frames_left;
+                }
+                
+                // No repeat.
+                else
+                {                    
+                    // Generate new path.
+                    current_path = generate_new_path();
+                    match_path_in_fish();
+                }
+                
+                // We are set to apply the next move.
+                move(); 
+            }
         }
         
         // The function generates new path and returns it.
@@ -768,11 +929,14 @@ class WanderFish : public Fish
             fish_path new_path;
             
             // Generate the amount of frames of the new path;
-            new_path.current_frames_left = rand() % (max_path_frames - min_path_frames) + min_path_frames;
+            if (max_path_frames - min_path_frames <= 0) { new_path.current_frames_left = min_path_frames; }
+            else { new_path.current_frames_left = rand() % (max_path_frames - min_path_frames) + min_path_frames; }
             
             // Generate the speed of the fish on each axis.
-            new_path.speed_x = rand() % (int) floor(max_speed_x - min_speed_x) + min_speed_x;
-            new_path.speed_y = rand() % (int) floor(max_speed_y - min_speed_y) + min_speed_y;
+            if (max_speed_x - min_speed_x <= 0) { new_path.speed_x = min_speed_x; }
+            else { new_path.speed_x = rand() % (int) floor(max_speed_x - min_speed_x) + min_speed_x; }
+            if (max_speed_y - min_speed_y <= 0) { new_path.speed_y = min_speed_y; }
+            else { new_path.speed_y = rand() % (int) floor(max_speed_y - min_speed_y) + min_speed_y; }
             
             // Define the direction of the new path.
             new_path.is_moving_right = rand() % 2;
@@ -789,6 +953,215 @@ class WanderFish : public Fish
             speed_y = current_path.speed_y;
         }
 };
+
+
+class FishNetwork
+{
+    /*
+        Manages the fish in the world.
+    */
+    
+    private:
+    
+        // The maximum fish population in the world.
+        int max_population;
+        
+        // The current population.
+        int current_population;
+        
+        // FishNetwork updates its grid with the relevant information.
+        Grid* grid;
+        
+        // An array of fish profiles must be loaded on startup.
+        fish_profile* fish_on_startup;
+        int fish_on_startup_length;
+        
+        // An array of fish profiles to load when available.
+        fish_profile* available_fish;
+        int available_fish_length;
+        
+        // The current fish in the fish network, as pointers.
+        WanderFish** fish;
+        int current_fish_amount;
+        
+        // This array is like a lot. On a given random number, each cell in the array states the range of numbers indicating on the matching available fish in the available_fish array.
+        // See the implemantation in the constructor for further explanation.
+        int* proportions_lot;
+        int lot_range;
+        
+    public:
+    
+        // Constructor.
+        FishNetwork(int new_max_population, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length)
+        {
+            // The max population.
+            max_population = new_max_population;
+            
+            // The current population.
+            current_population = 0;
+            
+            // Save the grid on which the fish network is happening.
+            grid = new_grid;
+            
+            // The fish profiles to load on startup.
+            fish_on_startup = new_fish_on_startup;
+            fish_on_startup_length = new_fish_on_startup_length;
+            
+            // The available fish profiles to load lively.
+            available_fish = new_available_fish;
+            available_fish_length = new_available_fish_length;
+            
+            // Create the fish array.
+            fish = new WanderFish*[max_population];
+            current_fish_amount = 0;
+            
+            // Create the proportions lot.
+            
+            // The lot range states the boundaries of the random generated number. Being calculated in the following loop.
+            lot_range = 0;
+            
+            // Initialize the proportions lot array.
+            proportions_lot = new int[available_fish_length];
+            
+            // Iterate over the available fish proportions.
+            for (int i = 0; i < available_fish_length; i++)
+            {
+                proportions_lot[i] = available_fish[i].proportion * 1000;
+                lot_range += proportions_lot[i];
+            }
+        }
+        
+        // The function creates and loads all the fish on startup.
+        void setup()
+        {           
+            // Load all the fish on startup.
+            for (int i = 0; i < fish_on_startup_length; i++)
+                load_fish_profile(fish_on_startup[i]);
+            
+            // Add fish to the fish network, to fill the max fish population.
+            load_available_fish();
+        }
+        
+        // The function loads available fish up to the max fish population.
+        void load_available_fish()
+        {
+            // Keep loading fish up to the max population.
+            while (current_fish_amount < max_population)
+            {               
+                // lot the next available fish.
+                int random_lot = rand() % lot_range;
+                
+                // Spot the lotted fish, and load it.
+                for (int i = 0; i < available_fish_length; i++)
+                {
+                    // That's the fish to load.
+                    if (random_lot < proportions_lot[i])
+                    {
+                        // Load the lotted fish.
+                        load_fish_profile(available_fish[i]);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // The function updates the boundaries of all the fish.
+        void update_boundaries(int left, int right, int top, int bottom)
+        {
+            // Iterate over the current fish in the network.
+            for (int i = 0; i < current_fish_amount; i++)
+            {
+                // Update the boundaries of the current fish (taking the scaling into considerations)
+                fish[i] -> update_boundaries(left, right, top, bottom);
+            }
+        }
+        
+        // Move all the fish in the network to their next step.
+        void move()
+        {
+            // Iterate over all the fish in the network.
+            for (int i = 0; i < current_fish_amount; i++)
+            {
+                fish[i] -> move();
+                grid -> refresh_entity(*fish);
+            }
+        }
+        
+        // Prepare the gifs of all the fish to their next frame.
+        void set_next_frame()
+        {
+            // Iterate over all the fish in the network.
+            for (int i = 0; i < current_fish_amount; i++)
+            {
+                fish[i] -> set_next_frame();
+            }
+        }
+        
+        // Draw the next frame of all the fish.
+        void draw_next_frame()
+        {
+            // Iterate over all the fish in the network.
+            for (int i = 0; i < current_fish_amount; i++)
+            {
+                fish[i] -> draw_next_frame();
+            }
+        }
+        
+        // The fish is gone, remove it from the network.
+        void delete_fish(WanderFish* fish_to_remove)
+        {
+            // Iterate over all the fish in the network.
+            for (int i = 0; i < current_fish_amount; i++)
+            {
+                // Check if this is the current fish.
+                if (fish_to_remove == fish[i])
+                {
+                    // Replace the last fish to the current cell.
+                    fish[i] = fish[current_fish_amount - 1];
+                    
+                    // Free the cell of the last fish, which was replaced.
+                    current_fish_amount--;
+                    
+                    // That's it.
+                    break;
+                }
+            }
+            
+            // Remove the fish from the grid.
+            grid -> remove_entity(fish_to_remove);
+        }
+        
+        void delete_network()
+        {
+            // Iterate over all the fish in the network.
+            for (int i = 0; i < current_fish_amount; i++)
+            {
+                fish[i] -> delete_gif();
+            }
+        }
+        
+        // The function receives a fish profile and loads it to the fish network.
+        void load_fish_profile(fish_profile current_fish_profile)
+        {
+            // Randomize a path stack from the paths_stack array of the fish profile.
+            int random_paths_stack_index = rand() % current_fish_profile.paths_stacks_amount;
+            
+            // The cells within array of the new fish.
+            Cell** cells_within = new Cell*[grid -> get_rows_amount() * grid -> get_columns_amount()];
+            
+            // Create the fish.
+            WanderFish* fish_to_load = new WanderFish(current_fish_profile.file_path, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], 0, 0, 0, 0, 1, 0, current_fish_profile.is_facing_left_on_startup, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
+            
+            // Save the fish in the fish array.
+            fish[current_fish_amount] = fish_to_load;
+            current_fish_amount++;
+            fish_to_load -> set_network(this);
+            
+            // Add the fish to the grid.
+            grid -> add_entity(fish_to_load);
+        }
+};
+
 
 
 // ----- Main Code -----
@@ -812,7 +1185,7 @@ int main()
     const char* PATH_FISH1 = "Textures/Fish/fish1.gif";
     
     // - Game Properties
-    const int FISH_POPULATION = 30;
+    const int FISH_POPULATION = 1;
     const int GRID_ROWS = 3;
     const int GRID_COLS = 5;
    
@@ -823,28 +1196,48 @@ int main()
 	
 	// Fps declaration.
 	SetTargetFPS(FPS);
-   
+    
     // Load Textures.
     Texture2D world1 = LoadTexture(PATH_WORLD1);
-
-    // Create Entities.
     
-    // - my fish.
-    Cell** cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish my_fish = MyFish(PATH_MY_FISH, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 0, false, FISH_POPULATION, cells_within_my_fish);
-    
-    // - fish1.
-    Cell** cells_within_fish1 = new Cell*[GRID_ROWS * GRID_COLS];
-    fish_path fish1_path = {10, 1, 1, 0, 1000}; 
-    fish_path fish1_paths[] = {fish1_path};
-    WanderFish fish1 = WanderFish(PATH_FISH1, Location(200, 400), Size(200, 200), 10 , 30, 1, 10, 250, 1000, fish1_paths, 1, 0, 0, 0, 0, 1, 0, true, FISH_POPULATION, cells_within_fish1);
-
     // Create the grid.
     Grid grid = Grid(GRID_COLS, GRID_ROWS, FISH_POPULATION, world1.width, world1.height);
 
+    // --- Create Entities ---
+    
+    // - my fish.
+    Cell** cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
+    
+    MyFish my_fish = MyFish(PATH_MY_FISH, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 0, false, FISH_POPULATION, cells_within_my_fish);
+
+    // -- Fish Network --
+   
+    // - Fish Profiles
+    
+    // Fish 1
+    
+    // Right
+    fish_path fish1_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish1_wander_right_paths[] = {fish1_path_wander_right};
+    paths_stack fish1_paths_stack_wander_right = {Location(), 1, fish1_wander_right_paths, true, false, true};
+    
+    // Left
+    fish_path fish1_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish1_wander_left_paths[] = {fish1_path_wander_left};
+    paths_stack fish1_paths_stack_wander_left = {Location(), 1, fish1_wander_left_paths, true, false, false}; 
+    
+    paths_stack fish1_paths_stacks[] = {fish1_paths_stack_wander_right, fish1_paths_stack_wander_left};
+    fish_profile fish1 = {PATH_FISH1, true, Size(150, 150), 3, 8, 20, 0, 2, 100, 100, 2, fish1_paths_stacks, 1};
+    
+    // - set the fish network
+    
+    fish_profile fish_profiles_on_startup[] = {fish1};
+    fish_profile available_fish[] = {fish1};
+    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 1, available_fish, 1);
+    fish_network.setup();
+
     // Add all the entities to the grid.
     grid.add_entity(&my_fish);
-    grid.add_entity(&fish1);
 
     // Create and setup the camera.
     Camera2D camera = { 0 };
@@ -862,8 +1255,12 @@ int main()
         
         // Set the relevant boundaries for all the fish (its scaling considartions occurs within the fish update boundaries calls).
         // Needs to be updated each frame becuase the scaling of the fish can be changed.
+        
+        // Update my fish.
         my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2);
-        fish1.update_boundaries(-100, world1.width + 100, -100, world1.height + 100);
+        
+        // Update the fish network.
+        fish_network.update_boundaries(0, world1.width, 0, world1.height);
         
         // --- User Input Management ---
         
@@ -875,9 +1272,8 @@ int main()
         
         // --- Entities Calculations ---
         
-        // Move fish1.
-        fish1.move();
-        grid.refresh_entity(&fish1);
+        // Move all the fish in the fish network.
+        fish_network.move();
         
         // --- Handle Collisions ---
         
@@ -943,9 +1339,9 @@ int main()
         
         // --- Prepare Gifs for drawing ---
         
-        // Prepare my fish for the next gif frame.
+        // Prepare all the fish to their next gif frame.
 		my_fish.set_next_frame();        
-        fish1.set_next_frame();
+        fish_network.set_next_frame();        
         
         // --- Draw ---
         
@@ -963,7 +1359,7 @@ int main()
 
                 // Draw the next gif frame of the fish.
                 my_fish.draw_next_frame();
-                fish1.draw_next_frame();
+                fish_network.draw_next_frame();
             
             // The end of the drawings affected by the camera.
             EndMode2D();
@@ -974,7 +1370,7 @@ int main()
 	// ----- Close Game -----
 	
     my_fish.delete_gif();
-    fish1.delete_gif();
+    fish_network.delete_network();
     
 	// Close the game screen.
 	CloseWindow();
