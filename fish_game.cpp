@@ -84,18 +84,22 @@ class Entity
         // The scale of the entity.
         float scale;
         
+        // The maximum scale of the entity.
+        float max_scale;
+        
         // The rotation of the entity.
         float rotation;
        
     public:
     
         // Constructor.
-        Entity(Location new_location, Size new_size, int new_scale, int new_rotation)
+        Entity(Location new_location, Size new_size, float new_scale, float new_max_scale, int new_rotation)
         {
             // Set the location, size, scale and rotation of the entity.
             location.set_location(new_location);
             size.set_size(new_size);
             scale = new_scale;
+            max_scale = new_max_scale;
             rotation = new_rotation;
         }
         
@@ -111,8 +115,16 @@ class Entity
         // Getters.
         Location get_location() { return location; }
         Size get_size() { return size; }
-        int get_scale() { return scale; }
+        float get_scale() { return scale; }
         int get_rotation() { return rotation; }
+        
+        // Setters.
+        // Setters.
+        void set_scale(float new_scale)
+        {
+            if (new_scale > max_scale) { scale = max_scale; }
+            else { scale = new_scale; }
+        }
 };
 
 
@@ -155,6 +167,7 @@ struct fish_profile
     // - Basic properties.
     
     const char* file_path;
+    string fish_type;
     bool is_facing_left_on_startup;
     Size size;
     int max_scaling;
@@ -206,6 +219,9 @@ class GridEntity : public Entity
         
         // The amount of cells currently within.
         int current_amount_of_cells_within;
+        
+        // Grid entities usually interact with each other (on collision for instance). Dynamic cast for "instance of" check, is inefficient and not recommended. Thefore, simply save the entity type as a string.
+        string entity_type;
 
     public:
 
@@ -216,7 +232,7 @@ class GridEntity : public Entity
     public:
 
         // Constructor.
-        GridEntity(Location new_location, Size new_size, int new_scale, int new_rotation, int new_max_cells_within, Cell** new_cells_within) : Entity(new_location, new_size, new_scale, new_rotation)
+        GridEntity(string new_entity_type, Location new_location, Size new_size, float new_scale, float new_max_scale, int new_rotation, int new_max_cells_within, Cell** new_cells_within) : Entity(new_location, new_size, new_scale, new_max_scale, new_rotation)
         {
             // Save the maximum amount of cells might be within.
             max_cells_within = new_max_cells_within; 
@@ -225,7 +241,10 @@ class GridEntity : public Entity
             cells_within = new_cells_within;
             
             // Not on the grid yet on initialization.
-            current_amount_of_cells_within = 0;           
+            current_amount_of_cells_within = 0;
+
+            // The type of the entity as a string.
+            entity_type = new_entity_type;
         }
         
         // Defalut constructor.
@@ -234,23 +253,26 @@ class GridEntity : public Entity
             max_cells_within = 0;
             cells_within = NULL;
             current_amount_of_cells_within = 0;
+            entity_type = "entity";
         }
 
         // The function returns the rectangular frame of the entity as a rectangle (NOT CONSIDERING ROTATION).
         Rectangle get_updated_rectangular_frame()
         {
             // Calculate the frame considering the scale of the entity.
-            rectangular_frame = {location.x - ((scale * size.width) / 2), location.y - ((scale * size.height) / 2), scale * size.width, scale * size.height};
+            rectangular_frame = {location.x - ((sqrt(scale) * size.width) / 2), location.y - ((sqrt(scale) * size.height) / 2), sqrt(scale) * size.width, sqrt(scale) * size.height};
 
             // Return the frame as rectangle.
             return rectangular_frame;
         }
-        
+
         // The function returns the array of cells that the entity is currently within.
         Cell** get_cells_within() { return cells_within; }
         
         // The function returns the amount of cells curretnly within.
         int get_amount_of_cells_within() { return current_amount_of_cells_within; }
+        
+        string get_entity_type() { return entity_type; }
         
         // The function resets the array indicating the cells in which the entity is currently in.
         void reset_cells_within() { current_amount_of_cells_within = 0;}
@@ -431,27 +453,27 @@ class Grid
             // Get the location and size of the entity.
             Location location = new_entity -> get_location();
             Size size = new_entity -> get_size();
-            int scale = new_entity -> get_scale();
+            float scale = new_entity -> get_scale();
             
             // Calculate the current actual size of the entity.
-            int width = scale * size.width;
-            int height = scale * size.height;
+            int width = (int) floor(sqrt(scale) * size.width);
+            int height = (int) floor(sqrt(scale) * size.height);
             
             // Calculate the x boundaries.
-            int x_boundary_left = location.x - (width / 2);
-            int x_boundary_right = x_boundary_left + width;
+            int x_boundary_left = location.x - (int) floor(width / 2);
+            int x_boundary_right = location.x + (int) ceil(width / 2);
             
             // Calculate the y boundaries.
-            int y_boundary_top = location.y - (height / 2);
-            int y_boundary_bottom = y_boundary_top + height;
+            int y_boundary_top = location.y - (int) floor(height / 2);
+            int y_boundary_bottom = location.y + (int) ceil(height / 2);
             
             // Find the left and right columns indexes boundaries.
-            int left_column_index_boundary = (int) ceil( (double) x_boundary_left / cell_width_pixels);
-            int right_column_index_boundary = (int) ceil( (double) x_boundary_right / cell_width_pixels);
+            int left_column_index_boundary = (int) floor( (double) x_boundary_left / cell_width_pixels);
+            int right_column_index_boundary = (int) floor( (double) x_boundary_right / cell_width_pixels);
             
             // Find the top and bottom rows indexes boundaries.
-            int top_row_index_boundary = (int) ceil( (double) y_boundary_top / cell_height_pixels);
-            int bottom_row_index_boundary = (int) ceil( (double) y_boundary_bottom / cell_height_pixels);
+            int top_row_index_boundary = (int) floor( (double) y_boundary_top / cell_height_pixels);
+            int bottom_row_index_boundary = (int) floor( (double) y_boundary_bottom / cell_height_pixels);
             
             // Don't care if outside the grid.
             if (top_row_index_boundary >= rows_amount) { top_row_index_boundary = rows_amount - 1; }
@@ -503,7 +525,10 @@ class Grid
         
         // The function returns the amount of rows.
         int get_rows_amount() { return rows_amount; }
-
+        
+        int get_width_pixels() { return width_pixels; }
+        int get_height_pixels() { return height_pixels; }
+        
         // Returns the cells matrix.
         Cell*** get_cells() { return cells; }
 
@@ -550,7 +575,7 @@ class MyGif: public GridEntity
     public:
     
         // Constructor.
-        MyGif(const char* new_file_path, Location new_location, Size new_size, int new_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : GridEntity(new_location, new_size, new_scale, new_rotation, new_max_cells_within, new_cells_within)
+        MyGif(const char* new_file_path, string new_entity_type, Location new_location, Size new_size, float new_scale, float new_max_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : GridEntity(new_entity_type, new_location, new_size, new_scale, new_max_scale, new_rotation, new_max_cells_within, new_cells_within)
         {
             // Save the path to the gif file.
             file_path = new_file_path;
@@ -611,7 +636,7 @@ class MyGif: public GridEntity
             Rectangle source = {0, 0, flip_width * my_gif_texture.width, flip_height * my_gif_texture.height};
             
             // Where to draw the gif. The input location is where to put the center on the screen.
-            Rectangle destination = {location.x, location.y, scale * size.width, scale * size.width};
+            Rectangle destination = {location.x, location.y, (int) floor(sqrt(scale) * size.width), (int) floor(scale * size.height)};
             
             // We want the gif to be rotated in relation to its center, and we want that the inputed location in the destination rectangle will be the center.
             Vector2 center = {size.width / 2, size.width / 2};
@@ -627,7 +652,7 @@ class MyGif: public GridEntity
             UnloadTexture(my_gif_texture);
             
             // Remove the image.
-            UnloadImage(my_gif_image); 
+            UnloadImage(my_gif_image);
         }
         
         // Returns the center location of the gif.
@@ -649,21 +674,30 @@ class Fish : public MyGif
     */
     
     protected:
-    
+        
+        // The type of the fish.
+        string fish_type;
+        
         // The speed of the fish on the x and y axes, pixels/frame;
         float speed_x, speed_y;
         
         // The location boundaries of the fish.
         int left_boundary, right_boundary, top_boundary, bottom_boundary;
         
-        // Relevant if the fish is a part of a network.
-        FishNetwork* network;
+        // Indicating if the fish is out of bounds.
+        bool is_fish_out_of_bounds;
+        
+        // Indicating that the fish was eaten.
+        bool is_eaten;
        
     public:
         
         // Counstructor.
-        Fish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : MyGif(file_path, new_location, new_size, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        Fish(const char* file_path, string new_fish_type, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : MyGif(file_path, "Fish", new_location, new_size, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
+            // Save the type of the fish.
+            fish_type = new_fish_type;
+            
             // Set the speed of the fish.
             speed_x = new_speed_x;
             speed_y = new_speed_y;
@@ -674,67 +708,152 @@ class Fish : public MyGif
             top_boundary = new_top_boundary;
             bottom_boundary = new_bottom_boundary;
             
-            // On startup set the network to NULL.
-            network = NULL;
+            // Set false in initialization. Update accurate value on the first move call.
+            is_fish_out_of_bounds = false;
+            
+            // The fish is not eaten on startup.
+            is_eaten = false;
         }
-        
-        void set_network(FishNetwork* new_network) { network = new_network; }
-        
+                
         // Apply movements (including boundaries check).
         void move_left() 
         {
-            if (location.x - speed_x < left_boundary) { boundary_exceed(); }
+            if (location.x - speed_x < left_boundary) { boundary_exceed(); is_fish_out_of_bounds = true; }
             else { location.x -= speed_x; flip_horizontal(); }
         }
         
         void move_right() 
         {
-            if (location.x + speed_x > right_boundary) { boundary_exceed(); }
+            if (location.x + speed_x > right_boundary) { boundary_exceed(); is_fish_out_of_bounds = true;}
             else { location.x += speed_x; unflip_horizontal(); }
         }
         
         void move_up() 
         {
-            if (location.y - speed_y < top_boundary) { boundary_exceed(); }
+            if (location.y - speed_y < top_boundary) { boundary_exceed(); is_fish_out_of_bounds = true;}
             else { location.y -= speed_y; }
         }
         
         void move_down() 
         {
-            if (location.y + speed_y > bottom_boundary) {boundary_exceed(); }
+            if (location.y + speed_y > bottom_boundary) {boundary_exceed(); is_fish_out_of_bounds = true;}
             else { location.y += speed_y; }
         }
         
         // The function receives new boundaries, and sets them as the new boundaries of the fish.
-        void update_boundaries(int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary)
+        void update_boundaries(int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, bool is_consider_size)
         {
-            left_boundary = new_left_boundary;
-            right_boundary = new_right_boundary;
-            top_boundary = new_top_boundary;
-            bottom_boundary = new_bottom_boundary;
+            // Note: the boundaries are compared to the current location of the fish, which consideres its center. Therefore the precise boundary would be calculated with half the current dimentions of the fish.
+            if (is_consider_size)
+            {
+                left_boundary = new_left_boundary - (int) floor(sqrt(scale) * size.width / 2);
+                right_boundary = new_right_boundary + (int) ceil(sqrt(scale) * size.width / 2);
+                top_boundary = new_top_boundary - (int) floor(sqrt(scale) * size.height / 2);
+                bottom_boundary = new_bottom_boundary + (int) ceil(sqrt(scale) * size.height / 2);
+            }
+            
+            else
+            {
+                left_boundary = new_left_boundary;
+                right_boundary = new_right_boundary;
+                top_boundary = new_top_boundary;
+                bottom_boundary = new_bottom_boundary;
+            }
         }
         
-        // The function is being called when an attempt to exceed the boundary occurred.
-        void boundary_exceed() 
-        {
-            // Tell the network of the fish, if exists, that the fish is gone.
-            //if (network != NULL)
-            //    network -> delete_fish(this);
-            
-            delete_fish();
-        }
+        // The function is being called when the fish is out of bounds.
+        void boundary_exceed() {  }
+        
+        // Returns true if the fish is out of bounds.
+        bool get_is_fish_out_of_bounds() { return is_fish_out_of_bounds; }
+        
+        // Getters.
+        Size get_size() { return size; }
+        string get_fish_type() { return fish_type; }
+        bool get_is_eaten() { return is_eaten; }
         
         // The function deletes the fish from the world.
         // If the gif is not a part of a network, it is required to manualy remove it from the grid.
         void delete_fish()
         {
-            delete_gif();
+            // delete_gif();
         }
         
-        // The function handles a collision between the fish and another GridEntity.
-        void handle_collision(GridEntity* colided_with_entity)
+        // The function receives the amount of pixels were eaten by the fish (simply calculation of width, height and scale of the eaten entity), and increases the size of the fish.
+        void eat (int pixels)
         {
-            cout << "\n\nHorray fish collided!\n\n";
+            // How many pixels are required to increase the width and the height by 1 pixel (the 4 is for the corners).
+            int current_pixels_for_loop = (int) floor((2 * size.width * sqrt(scale)) + (2 * size.height * sqrt(scale)) + 4);
+            
+            // How many full loops can be added.
+            int full_loops_counter = 0;
+            
+            // Count the full loops available, and update the left pixels.
+            while (pixels > current_pixels_for_loop)
+            {
+                pixels -= current_pixels_for_loop;
+                current_pixels_for_loop += 4;
+                full_loops_counter += 1;
+            }
+            
+            // The new scale is the current width + the added pixels / the original width of the fish.
+            scale =  pow(((size.width * sqrt(scale)) + full_loops_counter + ( (double) pixels / current_pixels_for_loop) ) / size.width, 2);
+            cout << "calculations: current_pixels_for_loop: " << current_pixels_for_loop << ", full_loops_counter: " << full_loops_counter << ", scale: " << scale << ".\n";
+        }
+        
+        // The function is being called when the fish is getting eaten.
+        void eaten()
+        {
+            // Indicate that the fish is getting eaten.
+            is_eaten = true;
+        }
+        
+        // The function handles a collision between the fish and another GridEntity (Note that a collision between two entities is called only once).
+        void handle_collision(GridEntity* collided_with_entity)
+        {
+            //cout << "checking...\n";
+            // It's a collision of two fish.
+            if (collided_with_entity -> get_entity_type() == "Fish")
+            {   
+                cout << "collision:" << fish_type << ", " << ((Fish*) collided_with_entity) -> get_fish_type() << ".\n";
+                // There is no canibalism in fish-hood.
+                if (fish_type == ((Fish*) collided_with_entity) -> get_fish_type())
+                {
+                    //cout << "same fish.\n\n";
+                    // Ignore the collision.
+                    return;
+                }
+                //cout << "different!\n";
+                // The size in width of the current fish.
+                int my_size = (int) floor(size.width * size.height * scale);
+            
+                // The size in width of the received fish.
+                int other_size = (int) floor(collided_with_entity -> get_size().width * collided_with_entity -> get_size().height * collided_with_entity -> get_scale());
+                
+                cout << "my type: " << fish_type << ", my width: " << size.width * sqrt(scale) << "\n";
+                cout << "other type: " << ((Fish*) collided_with_entity) -> get_fish_type() << ", other width: " << collided_with_entity -> get_size().width * sqrt(collided_with_entity -> get_scale()) << "\n";
+                
+                // Check which fish is larger.
+                if (my_size > other_size)
+                {
+                    // The current fish is getting bigger.
+                    eat(other_size);
+                    
+                    cout << "my fish new width: " << size.width * sqrt(scale) << "\n\n";
+
+                    // The other fish is getting eaten.
+                    ((Fish*) collided_with_entity) -> eaten();
+                }
+                
+                else
+                {
+                    // The other fish is getting bigger.
+                    ((Fish*)collided_with_entity) -> eat(my_size);
+                    cout << "other fish new width: " << (collided_with_entity -> get_size().width) * sqrt(collided_with_entity -> get_scale()) << "\n\n";
+                    // The current fish is getting eaten.
+                    eaten();
+                }
+            }           
         }
 };
 
@@ -747,7 +866,7 @@ class MyFish : public Fish
     
     public:
     
-        MyFish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        MyFish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, "my fish", new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
         }
 };
@@ -787,7 +906,7 @@ class WanderFish : public Fish
         // Constructor.
         // new_paths_count_in_paths_stack should state the number of stacks which are saved in the received paths_stack.
         // The location is relevant if there is no paths_stack or is_initial_location is false;
-        WanderFish(const char* file_path, Location new_location, bool is_initial_left_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        WanderFish(const char* file_path, string new_fish_type, Location new_location, bool is_initial_left_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, new_fish_type, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // Set the range of speeds on both axes.
             min_speed_x = new_min_speed_x;
@@ -838,7 +957,7 @@ class WanderFish : public Fish
             int y_coordinates;
             if (bottom_boundary - top_boundary <= 0) { y_coordinates = top_boundary + size.height; }
             else { y_coordinates = rand() % (bottom_boundary - top_boundary) + top_boundary; }
-            
+
             // The location should be at the left side of the world.
             if (is_initial_left_location)
             {
@@ -857,7 +976,7 @@ class WanderFish : public Fish
         {
             // Check if there are more frames left in the current path.
             if (current_path.current_frames_left > 0)
-            {
+            {               
                 // Move in the current path direction.
                 if (current_path.is_moving_right) { move_right(); }
                 else { move_left(); }
@@ -871,7 +990,6 @@ class WanderFish : public Fish
             // No frames left, need to load new path. Check if there are more paths in the paths stack.
             else if (paths_stack_index < my_paths_stack.length - 1)
             {
-                
                 // First reset the current path for later use.
                 my_paths_stack.paths[paths_stack_index].current_frames_left = current_path_original_frames_amount;
                 
@@ -1066,24 +1184,58 @@ class FishNetwork
         }
         
         // The function updates the boundaries of all the fish.
-        void update_boundaries(int left, int right, int top, int bottom)
+        void update_boundaries(int left, int right, int top, int bottom, bool is_consider_size)
         {
             // Iterate over the current fish in the network.
             for (int i = 0; i < current_fish_amount; i++)
             {
                 // Update the boundaries of the current fish (taking the scaling into considerations)
-                fish[i] -> update_boundaries(left, right, top, bottom);
+                fish[i] -> update_boundaries(left, right, top, bottom, is_consider_size);
+            }
+        }
+        
+        // The function deletes all the eaten fish.
+        void handle_eaten()
+        {
+            // Iterate over all the fish in the network.
+            for (int i = 0; i < current_fish_amount; i++)
+            {
+                // If the current fish is eaten.
+                if (fish[i] -> get_is_eaten())
+                {
+                    // delete it from the network.
+                    delete_fish(fish[i]);
+                    
+                    // The last fish replaced the current fish and current_fish_amount decreased by 1. We want to check the last fish as well.
+                    i = min(0, i - 1);
+                }
             }
         }
         
         // Move all the fish in the network to their next step.
         void move()
-        {
+        {           
             // Iterate over all the fish in the network.
             for (int i = 0; i < current_fish_amount; i++)
             {
+                // Move the fish and save the feedback.
                 fish[i] -> move();
-                grid -> refresh_entity(*fish);
+
+                // Check if the fish is out of bounds.
+                if (fish[i] -> get_is_fish_out_of_bounds())
+                {
+                    // That's the end of the fish.
+                    delete_fish(fish[i]);
+                    
+                    // The last fish replaced the current fish and current_fish_amount decreased by 1. We want to check the last fish as well.
+                    i = min(0, i - 1);
+                }
+                
+                else
+                {
+                    // Refresh the entity on the grid.
+                    grid -> refresh_entity(*fish);
+                }
             }
         }
         
@@ -1150,12 +1302,11 @@ class FishNetwork
             Cell** cells_within = new Cell*[grid -> get_rows_amount() * grid -> get_columns_amount()];
             
             // Create the fish.
-            WanderFish* fish_to_load = new WanderFish(current_fish_profile.file_path, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], 0, 0, 0, 0, 1, 0, current_fish_profile.is_facing_left_on_startup, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
+            WanderFish* fish_to_load = new WanderFish(current_fish_profile.file_path, current_fish_profile.fish_type, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], 0, grid -> get_width_pixels(), 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, 0, current_fish_profile.is_facing_left_on_startup, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
             
             // Save the fish in the fish array.
             fish[current_fish_amount] = fish_to_load;
             current_fish_amount++;
-            fish_to_load -> set_network(this);
             
             // Add the fish to the grid.
             grid -> add_entity(fish_to_load);
@@ -1174,7 +1325,7 @@ int main()
 	// --- Constants ---
 	
 	// - Screen
-	const int SCREEN_WIDTH = 1300;
+	const int SCREEN_WIDTH = 1800;
 	const int SCREEN_HEIGHT = 800;
 	const char* SCREEN_TITLE = "The Fish";
 	const int FPS = 30;
@@ -1185,10 +1336,10 @@ int main()
     const char* PATH_FISH1 = "Textures/Fish/fish1.gif";
     
     // - Game Properties
-    const int FISH_POPULATION = 1;
-    const int GRID_ROWS = 3;
-    const int GRID_COLS = 5;
-   
+    const int FISH_POPULATION = 3;
+    const int GRID_ROWS = 1;
+    const int GRID_COLS = 1;
+
 	// --- GUI Initialization ---
 	
 	// Screen set-up.
@@ -1208,7 +1359,7 @@ int main()
     // - my fish.
     Cell** cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
     
-    MyFish my_fish = MyFish(PATH_MY_FISH, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 0, false, FISH_POPULATION, cells_within_my_fish);
+    MyFish my_fish = MyFish(PATH_MY_FISH, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 30, 0, false, FISH_POPULATION, cells_within_my_fish);
 
     // -- Fish Network --
    
@@ -1219,15 +1370,33 @@ int main()
     // Right
     fish_path fish1_path_wander_right = {10, 0, true, true, 100};
     fish_path fish1_wander_right_paths[] = {fish1_path_wander_right};
-    paths_stack fish1_paths_stack_wander_right = {Location(), 1, fish1_wander_right_paths, true, false, true};
+    paths_stack fish1_paths_stack_wander_right = {Location(), 1, fish1_wander_right_paths, false, false, true};
     
     // Left
     fish_path fish1_path_wander_left = {10, 0, false, true, 100};
     fish_path fish1_wander_left_paths[] = {fish1_path_wander_left};
-    paths_stack fish1_paths_stack_wander_left = {Location(), 1, fish1_wander_left_paths, true, false, false}; 
+    paths_stack fish1_paths_stack_wander_left = {Location(), 1, fish1_wander_left_paths, false, false, false};
     
     paths_stack fish1_paths_stacks[] = {fish1_paths_stack_wander_right, fish1_paths_stack_wander_left};
-    fish_profile fish1 = {PATH_FISH1, true, Size(150, 150), 3, 8, 20, 0, 2, 100, 100, 2, fish1_paths_stacks, 1};
+    fish_profile fish1 = {PATH_FISH1, "fish 1", true, Size(150, 150), 3, 4, 30, 0, 2, 30, 300, 2, fish1_paths_stacks, 1};
+    
+    // - set the fish network
+    
+    fish_profile fish_profiles_on_startup[] = {fish1, fish1};
+    fish_profile available_fish[] = {fish1};
+    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 2, available_fish, 1);
+    fish_network.setup();
+    
+    /*
+    // Fish 1
+    
+    // Right
+    fish_path fish1_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish1_wander_right_paths[] = {fish1_path_wander_right};
+    paths_stack fish1_paths_stack_wander_right = {Location(), 1, fish1_wander_right_paths, true, false, true};
+      
+    paths_stack fish1_paths_stacks[] = {fish1_paths_stack_wander_right};
+    fish_profile fish1 = {PATH_FISH1, "fish 1", true, Size(150, 150), 3, 4, 30, 0, 2, 30, 300, 1, fish1_paths_stacks, 1};
     
     // - set the fish network
     
@@ -1235,16 +1404,19 @@ int main()
     fish_profile available_fish[] = {fish1};
     FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 1, available_fish, 1);
     fish_network.setup();
-
+    */
+    
+    
+    
     // Add all the entities to the grid.
     grid.add_entity(&my_fish);
 
     // Create and setup the camera.
     Camera2D camera = { 0 };
-    camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
-    camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+    //camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
+    //camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
     camera.rotation = 0;
-    camera.zoom = 0.7;
+    camera.zoom = 0.3;
     
 	// ----- Game Loop -----
 	
@@ -1257,10 +1429,10 @@ int main()
         // Needs to be updated each frame becuase the scaling of the fish can be changed.
         
         // Update my fish.
-        my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2);
-        
+        //my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2, true);
+        my_fish.update_boundaries(0, world1.width, 0, world1.height, true);
         // Update the fish network.
-        fish_network.update_boundaries(0, world1.width, 0, world1.height);
+        fish_network.update_boundaries(0, world1.width, 0, world1.height, true);
         
         // --- User Input Management ---
         
@@ -1271,6 +1443,12 @@ int main()
         if (IsKeyDown(KEY_DOWN)) { my_fish.move_down(); grid.refresh_entity(&my_fish); }
         
         // --- Entities Calculations ---
+        
+        // Remove all the eaten fish from the previous frame.
+        fish_network.handle_eaten();
+        
+        // Release available fish.
+        fish_network.load_available_fish();
         
         // Move all the fish in the fish network.
         fish_network.move();
@@ -1290,7 +1468,7 @@ int main()
         Rectangle first_entity_rectangle;
         Rectangle second_entity_rectangle;    
         
-        //cout << "\nNew frame:\n";
+        cout << "\nNew frame:\n";
         
         // Iterate over the cells of the grid.
         for (int row_index = 0; row_index < grid.get_rows_amount(); row_index++)
@@ -1300,12 +1478,12 @@ int main()
                 // Save the amount of entities in the current cell.
                 current_cell_entities_amount = grid_cells[row_index][col_index] -> get_entities_counter();
                 
-                /*
+                
                 if (current_cell_entities_amount > 0)
                 {
                     cout << "--> (" << row_index << ", " << col_index << ") " << current_cell_entities_amount << " entities.\n";
                 }
-                */
+                
                 
                 // Get the array of entities in the cell.
                 entities_in_cell = grid_cells[row_index][col_index] -> get_entities();
@@ -1330,12 +1508,12 @@ int main()
             }
         }
         
-        //cout << "End of frame.\n";
+        cout << "End of frame.\n";
         
         // --- Camera ---
         
         // Camera follows my fish movement.
-        camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
+        //camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
         
         // --- Prepare Gifs for drawing ---
         
