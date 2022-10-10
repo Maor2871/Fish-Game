@@ -6,6 +6,12 @@
 using namespace std;
 
 
+/*
+    Performance note: Every loaded image, takes RAM memory.
+        From CPU perspective the game can execute more FPS, but from RAM perspective there's a lower limit to the population on the screen.
+*/
+
+
 // ----- Basice Graphics classes -----
 
 
@@ -455,17 +461,19 @@ class Grid
             Size size = new_entity -> get_size();
             float scale = new_entity -> get_scale();
             
+            //{location.x - ((sqrt(scale) * size.width) / 2), location.y - ((sqrt(scale) * size.height) / 2), sqrt(scale) * size.width, sqrt(scale) * size.height}
+            
             // Calculate the current actual size of the entity.
             int width = (int) floor(sqrt(scale) * size.width);
             int height = (int) floor(sqrt(scale) * size.height);
             
             // Calculate the x boundaries.
-            int x_boundary_left = location.x - (int) floor(width / 2);
-            int x_boundary_right = location.x + (int) ceil(width / 2);
+            int x_boundary_left = location.x - ((sqrt(scale) * size.width) / 2);
+            int x_boundary_right = x_boundary_left + (sqrt(scale) * size.width);
             
             // Calculate the y boundaries.
-            int y_boundary_top = location.y - (int) floor(height / 2);
-            int y_boundary_bottom = location.y + (int) ceil(height / 2);
+            int y_boundary_top = location.y - ((sqrt(scale) * size.height) / 2);
+            int y_boundary_bottom = y_boundary_top + (sqrt(scale) * size.height);
             
             // Find the left and right columns indexes boundaries.
             int left_column_index_boundary = (int) floor( (double) x_boundary_left / cell_width_pixels);
@@ -526,8 +534,11 @@ class Grid
         // The function returns the amount of rows.
         int get_rows_amount() { return rows_amount; }
         
+        // Getters.
         int get_width_pixels() { return width_pixels; }
         int get_height_pixels() { return height_pixels; }
+        int get_cell_width_pixels() { return cell_width_pixels; }
+        int get_cell_height_pixels() { return cell_height_pixels; }
         
         // Returns the cells matrix.
         Cell*** get_cells() { return cells; }
@@ -636,10 +647,10 @@ class MyGif: public GridEntity
             Rectangle source = {0, 0, flip_width * my_gif_texture.width, flip_height * my_gif_texture.height};
             
             // Where to draw the gif. The input location is where to put the center on the screen.
-            Rectangle destination = {location.x, location.y, (int) floor(sqrt(scale) * size.width), (int) floor(scale * size.height)};
+            Rectangle destination = {location.x, location.y, (int) floor(sqrt(scale) * size.width), (int) floor(sqrt(scale) * size.height)};
             
             // We want the gif to be rotated in relation to its center, and we want that the inputed location in the destination rectangle will be the center.
-            Vector2 center = {size.width / 2, size.width / 2};
+            Vector2 center = {(sqrt(scale) * size.width) / 2, (sqrt(scale) * size.width) / 2};
             
             // Draw the next frame of the gif properly.
             DrawTexturePro(my_gif_texture, source, destination, center, rotation, WHITE);
@@ -762,7 +773,7 @@ class Fish : public MyGif
         }
         
         // The function is being called when the fish is out of bounds.
-        void boundary_exceed() {  }
+        void boundary_exceed() { if (fish_type != "my fish") { delete_gif(); } }
         
         // Returns true if the fish is out of bounds.
         bool get_is_fish_out_of_bounds() { return is_fish_out_of_bounds; }
@@ -798,7 +809,6 @@ class Fish : public MyGif
             
             // The new scale is the current width + the added pixels / the original width of the fish.
             scale =  pow(((size.width * sqrt(scale)) + full_loops_counter + ( (double) pixels / current_pixels_for_loop) ) / size.width, 2);
-            cout << "calculations: current_pixels_for_loop: " << current_pixels_for_loop << ", full_loops_counter: " << full_loops_counter << ", scale: " << scale << ".\n";
         }
         
         // The function is being called when the fish is getting eaten.
@@ -811,35 +821,26 @@ class Fish : public MyGif
         // The function handles a collision between the fish and another GridEntity (Note that a collision between two entities is called only once).
         void handle_collision(GridEntity* collided_with_entity)
         {
-            //cout << "checking...\n";
             // It's a collision of two fish.
             if (collided_with_entity -> get_entity_type() == "Fish")
             {   
-                cout << "collision:" << fish_type << ", " << ((Fish*) collided_with_entity) -> get_fish_type() << ".\n";
                 // There is no canibalism in fish-hood.
                 if (fish_type == ((Fish*) collided_with_entity) -> get_fish_type())
                 {
-                    //cout << "same fish.\n\n";
                     // Ignore the collision.
                     return;
                 }
-                //cout << "different!\n";
                 // The size in width of the current fish.
                 int my_size = (int) floor(size.width * size.height * scale);
             
                 // The size in width of the received fish.
                 int other_size = (int) floor(collided_with_entity -> get_size().width * collided_with_entity -> get_size().height * collided_with_entity -> get_scale());
-                
-                cout << "my type: " << fish_type << ", my width: " << size.width * sqrt(scale) << "\n";
-                cout << "other type: " << ((Fish*) collided_with_entity) -> get_fish_type() << ", other width: " << collided_with_entity -> get_size().width * sqrt(collided_with_entity -> get_scale()) << "\n";
-                
+
                 // Check which fish is larger.
                 if (my_size > other_size)
                 {
                     // The current fish is getting bigger.
                     eat(other_size);
-                    
-                    cout << "my fish new width: " << size.width * sqrt(scale) << "\n\n";
 
                     // The other fish is getting eaten.
                     ((Fish*) collided_with_entity) -> eaten();
@@ -849,7 +850,7 @@ class Fish : public MyGif
                 {
                     // The other fish is getting bigger.
                     ((Fish*)collided_with_entity) -> eat(my_size);
-                    cout << "other fish new width: " << (collided_with_entity -> get_size().width) * sqrt(collided_with_entity -> get_scale()) << "\n\n";
+
                     // The current fish is getting eaten.
                     eaten();
                 }
@@ -1108,7 +1109,7 @@ class FishNetwork
         int lot_range;
         
     public:
-    
+
         // Constructor.
         FishNetwork(int new_max_population, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length)
         {
@@ -1207,7 +1208,7 @@ class FishNetwork
                     delete_fish(fish[i]);
                     
                     // The last fish replaced the current fish and current_fish_amount decreased by 1. We want to check the last fish as well.
-                    i = min(0, i - 1);
+                    i = max(0, i - 1);
                 }
             }
         }
@@ -1228,13 +1229,13 @@ class FishNetwork
                     delete_fish(fish[i]);
                     
                     // The last fish replaced the current fish and current_fish_amount decreased by 1. We want to check the last fish as well.
-                    i = min(0, i - 1);
+                    i = max(0, i - 1);
                 }
                 
                 else
                 {
                     // Refresh the entity on the grid.
-                    grid -> refresh_entity(*fish);
+                    grid -> refresh_entity(fish[i]);
                 }
             }
         }
@@ -1311,6 +1312,17 @@ class FishNetwork
             // Add the fish to the grid.
             grid -> add_entity(fish_to_load);
         }
+
+        // For Debugging.
+        void print_frames()
+        {
+            // Iterate over all the fish in the network.
+            for (int i = 0; i < current_fish_amount; i++)
+            {
+                Rectangle frame = fish[i] -> get_updated_rectangular_frame();
+                DrawRectangle(frame.x,frame.y, frame.width, frame.height, RED);
+            }
+        }
 };
 
 
@@ -1336,9 +1348,10 @@ int main()
     const char* PATH_FISH1 = "Textures/Fish/fish1.gif";
     
     // - Game Properties
-    const int FISH_POPULATION = 3;
-    const int GRID_ROWS = 1;
-    const int GRID_COLS = 1;
+    const int FISH_POPULATION = 8;
+    const int GRID_ROWS = 3;
+    const int GRID_COLS = 8;
+    bool debug = false;
 
 	// --- GUI Initialization ---
 	
@@ -1382,41 +1395,20 @@ int main()
     
     // - set the fish network
     
-    fish_profile fish_profiles_on_startup[] = {fish1, fish1};
+    fish_profile fish_profiles_on_startup[] = {};
     fish_profile available_fish[] = {fish1};
-    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 2, available_fish, 1);
+    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 0, available_fish, 1);
     fish_network.setup();
-    
-    /*
-    // Fish 1
-    
-    // Right
-    fish_path fish1_path_wander_right = {10, 0, true, true, 100};
-    fish_path fish1_wander_right_paths[] = {fish1_path_wander_right};
-    paths_stack fish1_paths_stack_wander_right = {Location(), 1, fish1_wander_right_paths, true, false, true};
-      
-    paths_stack fish1_paths_stacks[] = {fish1_paths_stack_wander_right};
-    fish_profile fish1 = {PATH_FISH1, "fish 1", true, Size(150, 150), 3, 4, 30, 0, 2, 30, 300, 1, fish1_paths_stacks, 1};
-    
-    // - set the fish network
-    
-    fish_profile fish_profiles_on_startup[] = {fish1};
-    fish_profile available_fish[] = {fish1};
-    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 1, available_fish, 1);
-    fish_network.setup();
-    */
-    
-    
-    
+
     // Add all the entities to the grid.
     grid.add_entity(&my_fish);
 
     // Create and setup the camera.
     Camera2D camera = { 0 };
-    //camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
-    //camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+    camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
+    camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
     camera.rotation = 0;
-    camera.zoom = 0.3;
+    camera.zoom = 0.7;
     
 	// ----- Game Loop -----
 	
@@ -1429,8 +1421,8 @@ int main()
         // Needs to be updated each frame becuase the scaling of the fish can be changed.
         
         // Update my fish.
-        //my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2, true);
-        my_fish.update_boundaries(0, world1.width, 0, world1.height, true);
+        my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2, false);
+        
         // Update the fish network.
         fish_network.update_boundaries(0, world1.width, 0, world1.height, true);
         
@@ -1467,9 +1459,7 @@ int main()
         // The rectangular frame of the two entities in the loop.
         Rectangle first_entity_rectangle;
         Rectangle second_entity_rectangle;    
-        
-        cout << "\nNew frame:\n";
-        
+
         // Iterate over the cells of the grid.
         for (int row_index = 0; row_index < grid.get_rows_amount(); row_index++)
         {
@@ -1477,14 +1467,7 @@ int main()
             {
                 // Save the amount of entities in the current cell.
                 current_cell_entities_amount = grid_cells[row_index][col_index] -> get_entities_counter();
-                
-                
-                if (current_cell_entities_amount > 0)
-                {
-                    cout << "--> (" << row_index << ", " << col_index << ") " << current_cell_entities_amount << " entities.\n";
-                }
-                
-                
+
                 // Get the array of entities in the cell.
                 entities_in_cell = grid_cells[row_index][col_index] -> get_entities();
                 
@@ -1507,13 +1490,11 @@ int main()
                 }
             }
         }
-        
-        cout << "End of frame.\n";
-        
+
         // --- Camera ---
         
         // Camera follows my fish movement.
-        //camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
+        camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
         
         // --- Prepare Gifs for drawing ---
         
@@ -1534,7 +1515,29 @@ int main()
                 
                 // Draw the background.
                 DrawTexture(world1, 0, 0, WHITE);
-
+                
+                // Debug, print the grid.
+                if (debug)
+                {
+                    for (int row_index = 0; row_index < grid.get_rows_amount(); row_index++)
+                    {
+                        for (int col_index = 0; col_index < grid.get_columns_amount(); col_index++)
+                        {
+                            current_cell_entities_amount = grid_cells[row_index][col_index] -> get_entities_counter();
+                            if (current_cell_entities_amount > 0) { DrawRectangle(col_index * grid.get_cell_width_pixels(), row_index * grid.get_cell_height_pixels(), grid.get_cell_width_pixels(), grid.get_cell_height_pixels(), GRAY); }
+                            else { DrawRectangle(col_index * grid.get_cell_width_pixels(), row_index * grid.get_cell_height_pixels(), grid.get_cell_width_pixels(), grid.get_cell_height_pixels(), LIGHTGRAY); }
+                        }
+                    }
+                }
+                
+                // Debug, print the fish frames.
+                if (debug)
+                {
+                    fish_network.print_frames();
+                    Rectangle frame = my_fish.get_updated_rectangular_frame();
+                    DrawRectangle(frame.x,frame.y, frame.width, frame.height, RED);
+                }
+                
                 // Draw the next gif frame of the fish.
                 my_fish.draw_next_frame();
                 fish_network.draw_next_frame();
