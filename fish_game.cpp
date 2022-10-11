@@ -3,13 +3,9 @@
 #include <iostream>
 #include <random>
 #include <cmath>
+#include <thread>
+#include <mutex>
 using namespace std;
-
-
-/*
-    Performance note: Every loaded image, takes RAM memory.
-        From CPU perspective the game can execute more FPS, but from RAM perspective there's a lower limit to the population on the screen.
-*/
 
 
 // ----- Basice Graphics classes -----
@@ -172,7 +168,8 @@ struct fish_profile
 {
     // - Basic properties.
     
-    const char* file_path;
+    Image fish_image;
+    int* fish_image_frames_amount;
     string fish_type;
     bool is_facing_left_on_startup;
     Size size;
@@ -559,9 +556,6 @@ class MyGif: public GridEntity
     
     protected:
     
-        // The path to the gif.
-        const char* file_path;
-        
         // An optional attribute, if true on intialization, the gif originaly facing left. Indicates to flip it horizontaly to face right on startup.
         bool is_facing_left_on_startup;
         
@@ -572,7 +566,7 @@ class MyGif: public GridEntity
         bool is_flip_vertical;
         
         // When the gif is loaded, this variable contains the amount of frames this gif has.
-        int frames_amount = 0;
+        int* frames_amount;
         
         // Pointing on the current frame of the gif that is being displayed.
         int current_frame = 0;
@@ -586,10 +580,13 @@ class MyGif: public GridEntity
     public:
     
         // Constructor.
-        MyGif(const char* new_file_path, string new_entity_type, Location new_location, Size new_size, float new_scale, float new_max_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : GridEntity(new_entity_type, new_location, new_size, new_scale, new_max_scale, new_rotation, new_max_cells_within, new_cells_within)
+        MyGif(Image new_my_gif_image, int* new_frames_amount, string new_entity_type, Location new_location, Size new_size, float new_scale, float new_max_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : GridEntity(new_entity_type, new_location, new_size, new_scale, new_max_scale, new_rotation, new_max_cells_within, new_cells_within)
         {
-            // Save the path to the gif file.
-            file_path = new_file_path;
+            // Save the image of the gif.
+            my_gif_image = new_my_gif_image;
+            
+            // Save the frames amount instance.
+            frames_amount = new_frames_amount;
             
             // True if the gif faces left originaly.
             is_facing_left_on_startup = new_is_facing_left_on_startup;
@@ -599,10 +596,7 @@ class MyGif: public GridEntity
             else { is_flip_horizontal = false; }
 
             // Do not flip the texture verticaly on initialization.
-            is_flip_vertical = false;
-
-            // Create the image instance.
-            my_gif_image = LoadImageAnim(file_path, &frames_amount);
+            is_flip_vertical = false;           
 
             // Create the texture instance.
             my_gif_texture = LoadTextureFromImage(my_gif_image);
@@ -624,7 +618,7 @@ class MyGif: public GridEntity
             current_frame++;
             
             // Reset the current frame index if currently displaying the last frame of the gif.
-            if (current_frame >= frames_amount) { current_frame = 0; }
+            if (current_frame >= *frames_amount) { current_frame = 0; }
 
             // Get memory offset position for next frame data in image.data.
             next_frame_data_offset = my_gif_image.width * my_gif_image.height * 4 * current_frame;
@@ -661,9 +655,6 @@ class MyGif: public GridEntity
         {
             // Remove the texture.
             UnloadTexture(my_gif_texture);
-            
-            // Remove the image.
-            UnloadImage(my_gif_image);
         }
         
         // Returns the center location of the gif.
@@ -704,7 +695,7 @@ class Fish : public MyGif
     public:
         
         // Counstructor.
-        Fish(const char* file_path, string new_fish_type, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : MyGif(file_path, "Fish", new_location, new_size, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        Fish(Image new_my_fish_image, int* new_frames_amount, string new_fish_type, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : MyGif(new_my_fish_image, new_frames_amount, "Fish", new_location, new_size, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // Save the type of the fish.
             fish_type = new_fish_type;
@@ -867,7 +858,7 @@ class MyFish : public Fish
     
     public:
     
-        MyFish(const char* file_path, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, "my fish", new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        MyFish(Image new_my_fish_image, int* new_frames_amount, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(new_my_fish_image, new_frames_amount, "my fish", new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
         }
 };
@@ -907,7 +898,7 @@ class WanderFish : public Fish
         // Constructor.
         // new_paths_count_in_paths_stack should state the number of stacks which are saved in the received paths_stack.
         // The location is relevant if there is no paths_stack or is_initial_location is false;
-        WanderFish(const char* file_path, string new_fish_type, Location new_location, bool is_initial_left_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(file_path, new_fish_type, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        WanderFish(Image new_wander_fish_image, int* new_frames_amount, string new_fish_type, Location new_location, bool is_initial_left_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(new_wander_fish_image, new_frames_amount, new_fish_type, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // Set the range of speeds on both axes.
             min_speed_x = new_min_speed_x;
@@ -1108,10 +1099,13 @@ class FishNetwork
         int* proportions_lot;
         int lot_range;
         
+        // A mutex which gets unlocked when it is ok to add new fish to the fish array.
+        mutex* load_fish_mutex;
+        
     public:
 
         // Constructor.
-        FishNetwork(int new_max_population, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length)
+        FishNetwork(int new_max_population, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length, mutex* new_load_fish_mutex)
         {
             // The max population.
             max_population = new_max_population;
@@ -1129,6 +1123,9 @@ class FishNetwork
             // The available fish profiles to load lively.
             available_fish = new_available_fish;
             available_fish_length = new_available_fish_length;
+            
+            // Save the mutex.
+            load_fish_mutex = new_load_fish_mutex;
             
             // Create the fish array.
             fish = new WanderFish*[max_population];
@@ -1303,7 +1300,34 @@ class FishNetwork
             Cell** cells_within = new Cell*[grid -> get_rows_amount() * grid -> get_columns_amount()];
             
             // Create the fish.
-            WanderFish* fish_to_load = new WanderFish(current_fish_profile.file_path, current_fish_profile.fish_type, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], 0, grid -> get_width_pixels(), 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, 0, current_fish_profile.is_facing_left_on_startup, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
+            WanderFish* fish_to_load = new WanderFish(current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], 0, grid -> get_width_pixels(), 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, 0, current_fish_profile.is_facing_left_on_startup, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
+
+            // Save the fish in the fish array.
+            fish[current_fish_amount] = fish_to_load;
+            current_fish_amount++;
+            
+            // Add the fish to the grid.
+            grid -> add_entity(fish_to_load);
+            
+            /*
+            thread my_thread(&FishNetwork::load_fish_profile_thread, this, current_fish_profile);
+            my_thread.detach();
+            */
+        }
+
+        void load_fish_profile_thread(fish_profile current_fish_profile)
+        {
+            // Randomize a path stack from the paths_stack array of the fish profile.
+            int random_paths_stack_index = rand() % current_fish_profile.paths_stacks_amount;
+            
+            // The cells within array of the new fish.
+            Cell** cells_within = new Cell*[grid -> get_rows_amount() * grid -> get_columns_amount()];
+            
+            // Create the fish.
+            WanderFish* fish_to_load = new WanderFish(current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], 0, grid -> get_width_pixels(), 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, 0, current_fish_profile.is_facing_left_on_startup, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
+            
+            // Wait until it is ok to save the new fish in the fish array.
+            load_fish_mutex -> lock();
             
             // Save the fish in the fish array.
             fish[current_fish_amount] = fish_to_load;
@@ -1311,6 +1335,9 @@ class FishNetwork
             
             // Add the fish to the grid.
             grid -> add_entity(fish_to_load);
+            
+            // That's it, release the mutex.
+            load_fish_mutex -> unlock();
         }
 
         // For Debugging.
@@ -1348,10 +1375,11 @@ int main()
     const char* PATH_FISH1 = "Textures/Fish/fish1.gif";
     
     // - Game Properties
-    const int FISH_POPULATION = 8;
+    const int FISH_POPULATION = 30;
     const int GRID_ROWS = 3;
     const int GRID_COLS = 8;
-    bool debug = false;
+    bool debug = true;
+    mutex load_fish_mutex;
 
 	// --- GUI Initialization ---
 	
@@ -1360,6 +1388,13 @@ int main()
 	
 	// Fps declaration.
 	SetTargetFPS(FPS);
+    
+    // - Load images -
+    int my_fish_image_frames_amount;
+    Image my_fish_image = LoadImageAnim(PATH_MY_FISH, &my_fish_image_frames_amount);
+    
+    int fish1_image_frames_amount;
+    Image fish1_image = LoadImageAnim(PATH_FISH1, &fish1_image_frames_amount);
     
     // Load Textures.
     Texture2D world1 = LoadTexture(PATH_WORLD1);
@@ -1372,7 +1407,7 @@ int main()
     // - my fish.
     Cell** cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
     
-    MyFish my_fish = MyFish(PATH_MY_FISH, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 30, 0, false, FISH_POPULATION, cells_within_my_fish);
+    MyFish my_fish = MyFish(my_fish_image, &my_fish_image_frames_amount, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 30, 0, false, FISH_POPULATION, cells_within_my_fish);
 
     // -- Fish Network --
    
@@ -1391,37 +1426,51 @@ int main()
     paths_stack fish1_paths_stack_wander_left = {Location(), 1, fish1_wander_left_paths, false, false, false};
     
     paths_stack fish1_paths_stacks[] = {fish1_paths_stack_wander_right, fish1_paths_stack_wander_left};
-    fish_profile fish1 = {PATH_FISH1, "fish 1", true, Size(150, 150), 3, 4, 30, 0, 2, 30, 300, 2, fish1_paths_stacks, 1};
+    fish_profile fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(150, 150), 3, 4, 30, 0, 2, 30, 300, 2, fish1_paths_stacks, 1};
     
     // - set the fish network
     
     fish_profile fish_profiles_on_startup[] = {};
     fish_profile available_fish[] = {fish1};
-    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 0, available_fish, 1);
+    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 0, available_fish, 1, &load_fish_mutex);
     fish_network.setup();
 
     // Add all the entities to the grid.
     grid.add_entity(&my_fish);
-
+    
     // Create and setup the camera.
     Camera2D camera = { 0 };
-    camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
-    camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
-    camera.rotation = 0;
-    camera.zoom = 0.7;
     
+    if (debug)
+    {
+        camera.rotation = 0;
+        camera.zoom = 0.3;
+    }
+    
+    else
+    {
+        camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
+        camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+        camera.rotation = 0;
+        camera.zoom = 0.7;
+    }
+
 	// ----- Game Loop -----
 	
 	// As long as the Esc button or exit button were not pressed, continue to the next frame.
 	while (!WindowShouldClose())
 	{
+        // Do not let threads use or manipulate the fish network till the end of the current frame.
+        //load_fish_mutex.lock();
+        
         // --- Boundaries Management ---
         
         // Set the relevant boundaries for all the fish (its scaling considartions occurs within the fish update boundaries calls).
         // Needs to be updated each frame becuase the scaling of the fish can be changed.
         
         // Update my fish.
-        my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2, false);
+        if (debug) { my_fish.update_boundaries(0, world1.width, 0, world1.height, true); }
+        else { my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2, false); }
         
         // Update the fish network.
         fish_network.update_boundaries(0, world1.width, 0, world1.height, true);
@@ -1494,7 +1543,7 @@ int main()
         // --- Camera ---
         
         // Camera follows my fish movement.
-        camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
+        if (!debug) { camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y }; }
         
         // --- Prepare Gifs for drawing ---
         
@@ -1546,12 +1595,19 @@ int main()
             EndMode2D();
 
         EndDrawing();
+        
+        // Let the threads manipulate the fish network.
+        //load_fish_mutex.unlock();
 	}
 	
 	// ----- Close Game -----
 	
     my_fish.delete_gif();
     fish_network.delete_network();
+    
+    // Remove the image.
+    UnloadImage(my_fish_image);
+    UnloadImage(fish1_image);
     
 	// Close the game screen.
 	CloseWindow();
