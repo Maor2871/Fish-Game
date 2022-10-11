@@ -861,6 +861,8 @@ class MyFish : public Fish
         MyFish(Image new_my_fish_image, int* new_frames_amount, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(new_my_fish_image, new_frames_amount, "my fish", new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
         }
+        
+        bool is_alive() { return !is_eaten; }
 };
 
 
@@ -1144,6 +1146,7 @@ class FishNetwork
             {
                 proportions_lot[i] = available_fish[i].proportion * 1000;
                 lot_range += proportions_lot[i];
+                cout << "cell " << i << ": " << proportions_lot[i] << ".\n";
             }
         }
         
@@ -1167,11 +1170,16 @@ class FishNetwork
                 // lot the next available fish.
                 int random_lot = rand() % lot_range;
                 
+                // Current lots sum.
+                int lots_sum = 0;
+                
                 // Spot the lotted fish, and load it.
                 for (int i = 0; i < available_fish_length; i++)
                 {
+                    lots_sum += proportions_lot[i];
+                    
                     // That's the fish to load.
-                    if (random_lot < proportions_lot[i])
+                    if (random_lot < lots_sum)
                     {
                         // Load the lotted fish.
                         load_fish_profile(available_fish[i]);
@@ -1426,13 +1434,28 @@ int main()
     paths_stack fish1_paths_stack_wander_left = {Location(), 1, fish1_wander_left_paths, false, false, false};
     
     paths_stack fish1_paths_stacks[] = {fish1_paths_stack_wander_right, fish1_paths_stack_wander_left};
-    fish_profile fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(150, 150), 3, 4, 30, 0, 2, 30, 300, 2, fish1_paths_stacks, 1};
+    fish_profile fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(150, 150), 3, 4, 30, 0, 2, 30, 300, 2, fish1_paths_stacks, 10};
+    
+    // Fish 2
+    
+    // Right
+    fish_path fish2_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish2_wander_right_paths[] = {fish2_path_wander_right};
+    paths_stack fish2_paths_stack_wander_right = {Location(), 1, fish2_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish2_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish2_wander_left_paths[] = {fish2_path_wander_left};
+    paths_stack fish2_paths_stack_wander_left = {Location(), 1, fish2_wander_left_paths, false, false, false};
+    
+    paths_stack fish2_paths_stacks[] = {fish2_paths_stack_wander_right, fish2_paths_stack_wander_left};
+    fish_profile fish2 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(600, 600), 3, 4, 10, 0, 2, 30, 300, 2, fish2_paths_stacks, 1};
     
     // - set the fish network
     
-    fish_profile fish_profiles_on_startup[] = {};
-    fish_profile available_fish[] = {fish1};
-    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 0, available_fish, 1, &load_fish_mutex);
+    fish_profile fish_profiles_on_startup[] = {fish2};
+    fish_profile available_fish[] = {fish1, fish2};
+    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 1, available_fish, 2, &load_fish_mutex);
     fish_network.setup();
 
     // Add all the entities to the grid.
@@ -1595,6 +1618,12 @@ int main()
             EndMode2D();
 
         EndDrawing();
+        
+        // Check if the game is over.
+        if (!my_fish.is_alive())
+        {
+            break;
+        }
         
         // Let the threads manipulate the fish network.
         //load_fish_mutex.unlock();
