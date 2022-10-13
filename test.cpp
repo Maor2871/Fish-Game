@@ -1,7 +1,6 @@
 #include "raylib.h"
 
-#define MAX_FRAME_DELAY     20
-#define MIN_FRAME_DELAY      1
+#define NUM_FRAMES  3       // Number of frames (rectangles) for the button sprite texture
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -10,35 +9,29 @@ int main(void)
 {
     // Initialization
     //--------------------------------------------------------------------------------------
-    const int screenWidth = 1500;
-    const int screenHeight = 800;
+    const int screenWidth = 800;
+    const int screenHeight = 450;
 
-    InitWindow(screenWidth, screenHeight, "raylib [textures] example - gif playing");
+    InitWindow(screenWidth, screenHeight, "raylib [textures] example - sprite button");
 
-    int animFrames = 0;
+    InitAudioDevice();      // Initialize audio device
 
-    // Load all GIF animation frames into a single Image
-    // NOTE: GIF data is always loaded as RGBA (32bit) by default
-    // NOTE: Frames are just appended one after another in image.data memory
-    Image imScarfyAnim = LoadImageAnim("Textures/my_fish.gif", &animFrames);
+    //Sound fxButton = LoadSound("resources/buttonfx.wav");   // Load button sound
+    Texture2D button = LoadTexture("Textures/Menus/Main Menu/Campain button.png"); // Load button texture
 
-    // Load texture from image
-    // NOTE: We will update this texture when required with next frame data
-    // WARNING: It's not recommended to use this technique for sprites animation,
-    // use spritesheets instead, like illustrated in textures_sprite_anim example
-    Texture2D texScarfyAnim = LoadTextureFromImage(imScarfyAnim);
-    Texture2D texScarfyAnim2 = LoadTextureFromImage(imScarfyAnim);
+    // Define frame rectangle for drawing
+    float frameHeight = (float)button.height/NUM_FRAMES;
+    Rectangle sourceRec = { 0, 0, (float)button.width, frameHeight };
 
-    unsigned int nextFrameDataOffset = 0;  // Current byte offset to next frame in image.data
-    unsigned int nextFrameDataOffset2 = 0;  // Current byte offset to next frame in image.data
+    // Define button bounds on screen
+    Rectangle btnBounds = { screenWidth/2.0f - button.width/2.0f, screenHeight/2.0f - button.height/NUM_FRAMES/2.0f, (float)button.width, frameHeight };
 
-    int currentAnimFrame = 0;       // Current animation frame to load and draw
-    int currentAnimFrame2 = 0;       // Current animation frame to load and draw
-    int frameDelay = 8;             // Frame delay to switch between animation frames
-    int frameCounter = 0;           // General frames counter
-    int frameCounter2 = 0;           // General frames counter
+    int btnState = 0;               // Button state: 0-NORMAL, 1-MOUSE_HOVER, 2-PRESSED
+    bool btnAction = false;         // Button action should be activated
 
-    SetTargetFPS(30);               // Set our game to run at 60 frames-per-second
+    Vector2 mousePoint = { 0.0f, 0.0f };
+
+    SetTargetFPS(60);
     //--------------------------------------------------------------------------------------
 
     // Main game loop
@@ -46,48 +39,28 @@ int main(void)
     {
         // Update
         //----------------------------------------------------------------------------------
-        frameCounter++;
-        frameCounter2++;
-        if (frameCounter >= frameDelay)
+        mousePoint = GetMousePosition();
+        btnAction = false;
+
+        // Check button state
+        if (CheckCollisionPointRec(mousePoint, btnBounds))
         {
-            // Move to next frame
-            // NOTE: If final frame is reached we return to first frame
-            currentAnimFrame++;
-            if (currentAnimFrame >= animFrames) currentAnimFrame = 0;
+            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) btnState = 2;
+            else btnState = 1;
 
-            // Get memory offset position for next frame data in image.data
-            nextFrameDataOffset = imScarfyAnim.width*imScarfyAnim.height*4*currentAnimFrame;
-
-            // Update GPU texture data with next frame image data
-            // WARNING: Data size (frame size) and pixel format must match already created texture
-            UpdateTexture(texScarfyAnim, ((unsigned char *)imScarfyAnim.data) + nextFrameDataOffset);
-
-            frameCounter = 0;
+            if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) btnAction = true;
         }
-        
-        if (frameCounter2 >= frameDelay)
+        else btnState = 0;
+
+        if (btnAction)
         {
-            // Move to next frame
-            // NOTE: If final frame is reached we return to first frame
-            currentAnimFrame2++;
-            if (currentAnimFrame2 >= animFrames) currentAnimFrame2 = 0;
+            //PlaySound(fxButton);
 
-            // Get memory offset position for next frame data in image.data
-            nextFrameDataOffset2 = imScarfyAnim.width*imScarfyAnim.height*4*currentAnimFrame2;
-
-            // Update GPU texture data with next frame image data
-            // WARNING: Data size (frame size) and pixel format must match already created texture
-            UpdateTexture(texScarfyAnim2, ((unsigned char *)imScarfyAnim.data) + nextFrameDataOffset2);
-
-            frameCounter2 = 0;
+            // TODO: Any desired action
         }
 
-        // Control frames delay
-        if (IsKeyPressed(KEY_RIGHT)) frameDelay++;
-        else if (IsKeyPressed(KEY_LEFT)) frameDelay--;
-
-        if (frameDelay > MAX_FRAME_DELAY) frameDelay = MAX_FRAME_DELAY;
-        else if (frameDelay < MIN_FRAME_DELAY) frameDelay = MIN_FRAME_DELAY;
+        // Calculate button frame rectangle to draw depending on button state
+        sourceRec.y = btnState*frameHeight;
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -96,24 +69,7 @@ int main(void)
 
             ClearBackground(RAYWHITE);
 
-            DrawText(TextFormat("TOTAL GIF FRAMES:  %02i", animFrames), 50, 30, 20, LIGHTGRAY);
-            DrawText(TextFormat("CURRENT FRAME: %02i", currentAnimFrame), 50, 60, 20, GRAY);
-            DrawText(TextFormat("CURRENT FRAME IMAGE.DATA OFFSET: %02i", nextFrameDataOffset), 50, 90, 20, GRAY);
-
-            DrawText("FRAMES DELAY: ", 100, 305, 10, DARKGRAY);
-            DrawText(TextFormat("%02i frames", frameDelay), 620, 305, 10, DARKGRAY);
-            DrawText("PRESS RIGHT/LEFT KEYS to CHANGE SPEED!", 290, 350, 10, DARKGRAY);
-
-            for (int i = 0; i < MAX_FRAME_DELAY; i++)
-            {
-                if (i < frameDelay) DrawRectangle(190 + 21*i, 300, 20, 20, RED);
-                DrawRectangleLines(190 + 21*i, 300, 20, 20, MAROON);
-            }
-
-            DrawTexture(texScarfyAnim, GetScreenWidth()/2 - texScarfyAnim.width/2, 140, WHITE);
-            DrawTexture(texScarfyAnim2, GetScreenWidth()/2 - texScarfyAnim2.width/2 - 300, 140, WHITE);
-
-            DrawText("(c) Scarfy sprite by Eiden Marsal", screenWidth - 200, screenHeight - 20, 10, GRAY);
+            DrawTextureRec(button, sourceRec, (Vector2){ btnBounds.x, btnBounds.y }, WHITE); // Draw button frame
 
         EndDrawing();
         //----------------------------------------------------------------------------------
@@ -121,10 +77,12 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    UnloadTexture(texScarfyAnim);   // Unload texture
-    UnloadImage(imScarfyAnim);      // Unload image (contains all frames)
+    UnloadTexture(button);  // Unload button texture
+    //UnloadSound(fxButton);  // Unload sound
 
-    CloseWindow();                  // Close window and OpenGL context
+    CloseAudioDevice();     // Close audio device
+
+    CloseWindow();          // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
 
     return 0;

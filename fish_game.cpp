@@ -436,6 +436,18 @@ class Grid
             }
         }
         
+        // Default Constructor.
+        Grid()
+        {
+            cell_maximum_amount_of_entities = 0;
+            columns_amount = 0;
+            rows_amount = 0;
+            width_pixels = 0;
+            height_pixels = 0;
+            cell_width_pixels = 0;
+            cell_height_pixels = 0;
+        }
+        
         // The function receives an entity and refresh it location on the grid.
         void refresh_entity(GridEntity* entity_to_refresh)
         {
@@ -602,6 +614,14 @@ class MyGif: public GridEntity
             my_gif_texture = LoadTextureFromImage(my_gif_image);
         }
         
+        // Default Constructor.
+        MyGif() : GridEntity("", Location(), Size(), 1, 1, 0, 1, new Cell*[0])
+        {
+            is_facing_left_on_startup = false;
+            is_flip_horizontal = false;
+            is_flip_vertical = false;
+        }
+        
         // Flipping manipulations
         void flip_horizontal() {is_facing_left_on_startup ? is_flip_horizontal = false : is_flip_horizontal = true;}
         void flip_vertical() {is_flip_vertical = true;}
@@ -716,7 +736,21 @@ class Fish : public MyGif
             // The fish is not eaten on startup.
             is_eaten = false;
         }
-                
+
+        // Default Constructor.
+        Fish() : MyGif()
+        {
+            fish_type = "none";
+            speed_x = 1;
+            speed_y = 1;
+            left_boundary = 0;
+            right_boundary = 0;
+            top_boundary = 1;
+            bottom_boundary = 1;
+            is_fish_out_of_bounds = false;
+            is_eaten = false;
+        }
+
         // Apply movements (including boundaries check).
         void move_left() 
         {
@@ -858,8 +892,15 @@ class MyFish : public Fish
     
     public:
     
+        // Constructor.
         MyFish(Image new_my_fish_image, int* new_frames_amount, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(new_my_fish_image, new_frames_amount, "my fish", new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
+        }
+        
+        // Default Constructor.
+        MyFish() : Fish()
+        {
+            
         }
         
         bool is_alive() { return !is_eaten; }
@@ -942,6 +983,19 @@ class WanderFish : public Fish
             
             // Update the properties of the wander fish to match the properties of the current path.
             match_path_in_fish();
+        }
+        
+        // Default Constructor.
+        WanderFish() : Fish()
+        {
+            min_path_frames = 100;
+            max_path_frames = 1000;
+            paths_stack_index = 0;
+            current_path_original_frames_amount = 1;
+            min_speed_x = 1;
+            max_speed_x = 10;
+            min_speed_y = 1;
+            max_speed_y = 1;
         }
         
         // The function sets a random initial_location.
@@ -1146,8 +1200,18 @@ class FishNetwork
             {
                 proportions_lot[i] = available_fish[i].proportion * 1000;
                 lot_range += proportions_lot[i];
-                cout << "cell " << i << ": " << proportions_lot[i] << ".\n";
             }
+        }
+        
+        // Default Constructor.
+        FishNetwork()
+        {
+            max_population = 1;
+            current_population = 0;
+            fish_on_startup = 0;
+            available_fish_length = 0;
+            current_fish_amount = 0;
+            lot_range = 0;
         }
         
         // The function creates and loads all the fish on startup.
@@ -1367,29 +1431,33 @@ class FishNetwork
 
 int main()
 {
-	// ----- Initialization -----
+	// ##### --- Initialization --- #####
 	
-	// --- Constants ---
+	// ### --- Constants --- ###
 	
 	// - Screen
-	const int SCREEN_WIDTH = 1800;
-	const int SCREEN_HEIGHT = 800;
+	int SCREEN_WIDTH = 1000;
+	int SCREEN_HEIGHT = 800;
 	const char* SCREEN_TITLE = "The Fish";
 	const int FPS = 30;
     
     // - Graphics Paths
-    const char* PATH_MY_FISH = "Textures/my_fish.gif";
-    const char* PATH_WORLD1 = "Textures/Worlds/world1.png";
-    const char* PATH_FISH1 = "Textures/Fish/fish1.gif";
+    const char* PATH_MAIN_MENU = "Textures/Menus/Main Menu/Main Menu.png";
+    const char* PATH_CAMPAIN_BUTTON = "Textures/Menus/Main Menu/Campain button.png";
+    const char* PATH_MAP = "Textures/Menus/Map/Map.png";
+    const char* PATH_WORLD1_BUTTON = "Textures/Menus/Map/World 1 Button.png";
+    const char* PATH_MY_FISH = "Textures/Fish/My Fish/My Fish.gif";
+    const char* PATH_WORLD1 = "Textures/Worlds/World 1/World 1.png";
+    const char* PATH_FISH1 = "Textures/Fish/Fish 3/fish 3.gif";
     
     // - Game Properties
-    const int FISH_POPULATION = 30;
+    const int FISH_POPULATION = 10;
     const int GRID_ROWS = 3;
     const int GRID_COLS = 8;
-    bool debug = true;
+    bool debug = false;
     mutex load_fish_mutex;
 
-	// --- GUI Initialization ---
+	// ### --- GUI Initialization --- ###
 	
 	// Screen set-up.
 	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE);
@@ -1397,31 +1465,79 @@ int main()
 	// Fps declaration.
 	SetTargetFPS(FPS);
     
-    // - Load images -
+    // Set to full screen.
+    int monitor = GetCurrentMonitor();
+    SCREEN_WIDTH = GetMonitorWidth(monitor);
+    SCREEN_HEIGHT = GetMonitorHeight(monitor);
+    SetWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+    ToggleFullscreen();
+    
+    // Defines the current screen in the main loop.
+    string current_screen = "Main Menu";
+    bool is_screen_initialized = false;
+    
+    // # ----- Load images ----- #
+    
     int my_fish_image_frames_amount;
     Image my_fish_image = LoadImageAnim(PATH_MY_FISH, &my_fish_image_frames_amount);
     
     int fish1_image_frames_amount;
     Image fish1_image = LoadImageAnim(PATH_FISH1, &fish1_image_frames_amount);
     
+    // # ----- Variables -----
+
+    MyFish my_fish;
+    FishNetwork fish_network;
+    Grid grid;
+    Camera2D camera;
+    int current_cell_entities_amount;
+    Cell*** grid_cells;
+    
+    // # ----- Main Menu ----- #
+    
+    // Load the main menu texture.
+    Texture2D main_menu = LoadTexture(PATH_MAIN_MENU);
+    
+    // Load the campain button.
+    Texture2D campain_button = LoadTexture(PATH_CAMPAIN_BUTTON); 
+    
+    // Define frame rectangle for drawing
+    Rectangle campain_button_frame = { (int) floor (SCREEN_WIDTH / 2 - campain_button.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2) + 300, campain_button.width, campain_button.height };
+    
+    // The current mouse point location.
+    Vector2 mouse_point = { 0, 0 };
+    
+    // # ----- Map ----- #
+    
+    // Load the map texture.
+    Texture2D map = LoadTexture(PATH_MAP);
+    
+    // Load the worlds buttons.
+    Texture2D world1_button = LoadTexture(PATH_WORLD1_BUTTON);
+    
+    // Define frame rectangle for drawing
+    Rectangle world1_button_frame = { 100, 100, world1_button.width, world1_button.height };
+    
+    // # ----- World 1 ----- #
+    
     // Load Textures.
     Texture2D world1 = LoadTexture(PATH_WORLD1);
     
     // Create the grid.
-    Grid grid = Grid(GRID_COLS, GRID_ROWS, FISH_POPULATION, world1.width, world1.height);
+    Grid world1_grid = Grid(GRID_COLS, GRID_ROWS, FISH_POPULATION, world1.width, world1.height);
 
-    // --- Create Entities ---
+    // ----- Create Entities -----
     
-    // - my fish.
+    // --- my fish ---
+    
     Cell** cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    
-    MyFish my_fish = MyFish(my_fish_image, &my_fish_image_frames_amount, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 30, 0, false, FISH_POPULATION, cells_within_my_fish);
+    MyFish world1_my_fish = MyFish(my_fish_image, &my_fish_image_frames_amount, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 30, 0, true, FISH_POPULATION, cells_within_my_fish);
 
-    // -- Fish Network --
+    // --- Fish Network ---
    
-    // - Fish Profiles
+    // -- Fish Profiles --
     
-    // Fish 1
+    // - Fish 1 -
     
     // Right
     fish_path fish1_path_wander_right = {10, 0, true, true, 100};
@@ -1436,7 +1552,7 @@ int main()
     paths_stack fish1_paths_stacks[] = {fish1_paths_stack_wander_right, fish1_paths_stack_wander_left};
     fish_profile fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(150, 150), 3, 4, 30, 0, 2, 30, 300, 2, fish1_paths_stacks, 10};
     
-    // Fish 2
+    // - Fish 2 -
     
     // Right
     fish_path fish2_path_wander_right = {10, 0, true, true, 100};
@@ -1451,182 +1567,245 @@ int main()
     paths_stack fish2_paths_stacks[] = {fish2_paths_stack_wander_right, fish2_paths_stack_wander_left};
     fish_profile fish2 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(600, 600), 3, 4, 10, 0, 2, 30, 300, 2, fish2_paths_stacks, 1};
     
-    // - set the fish network
+    // -- Setup --
     
     fish_profile fish_profiles_on_startup[] = {fish2};
     fish_profile available_fish[] = {fish1, fish2};
-    FishNetwork fish_network = FishNetwork(FISH_POPULATION, &grid, fish_profiles_on_startup, 1, available_fish, 2, &load_fish_mutex);
-    fish_network.setup();
+    FishNetwork world1_fish_network = FishNetwork(FISH_POPULATION, &world1_grid, fish_profiles_on_startup, 1, available_fish, 2, &load_fish_mutex);
+
+    // ----- Final Setups World1 -----
 
     // Add all the entities to the grid.
-    grid.add_entity(&my_fish);
+    world1_grid.add_entity(&world1_my_fish);
     
     // Create and setup the camera.
-    Camera2D camera = { 0 };
+    Camera2D world1_camera = { 0 };
     
     if (debug)
     {
-        camera.rotation = 0;
-        camera.zoom = 0.3;
+        world1_camera.rotation = 0;
+        world1_camera.zoom = 0.3;
     }
     
     else
     {
-        camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y };
-        camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
-        camera.rotation = 0;
-        camera.zoom = 0.7;
+        world1_camera.target = (Vector2){ world1_my_fish.get_location().x, world1_my_fish.get_location().y };
+        world1_camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+        world1_camera.rotation = 0;
+        world1_camera.zoom = 0.7;
     }
+    
 
 	// ----- Game Loop -----
 	
 	// As long as the Esc button or exit button were not pressed, continue to the next frame.
 	while (!WindowShouldClose())
 	{
-        // Do not let threads use or manipulate the fish network till the end of the current frame.
-        //load_fish_mutex.lock();
-        
-        // --- Boundaries Management ---
-        
-        // Set the relevant boundaries for all the fish (its scaling considartions occurs within the fish update boundaries calls).
-        // Needs to be updated each frame becuase the scaling of the fish can be changed.
-        
-        // Update my fish.
-        if (debug) { my_fish.update_boundaries(0, world1.width, 0, world1.height, true); }
-        else { my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2, false); }
-        
-        // Update the fish network.
-        fish_network.update_boundaries(0, world1.width, 0, world1.height, true);
-        
-        // --- User Input Management ---
-        
-        // Handle arrow keys strokes. They move the fish in the world.
-        if (IsKeyDown(KEY_RIGHT)) { my_fish.move_right(); grid.refresh_entity(&my_fish); }
-        if (IsKeyDown(KEY_LEFT)) { my_fish.move_left(); grid.refresh_entity(&my_fish); }
-        if (IsKeyDown(KEY_UP)) { my_fish.move_up(); grid.refresh_entity(&my_fish); }
-        if (IsKeyDown(KEY_DOWN)) { my_fish.move_down(); grid.refresh_entity(&my_fish); }
-        
-        // --- Entities Calculations ---
-        
-        // Remove all the eaten fish from the previous frame.
-        fish_network.handle_eaten();
-        
-        // Release available fish.
-        fish_network.load_available_fish();
-        
-        // Move all the fish in the fish network.
-        fish_network.move();
-        
-        // --- Handle Collisions ---
-        
-        // A reference to the cells array.
-        Cell*** grid_cells = grid.get_cells();
-        
-        // The amount of entities currently in the current cell.
-        int current_cell_entities_amount;
-        
-        // The entities array of the current cell.
-        GridEntity** entities_in_cell;
-        
-        // The rectangular frame of the two entities in the loop.
-        Rectangle first_entity_rectangle;
-        Rectangle second_entity_rectangle;    
-
-        // Iterate over the cells of the grid.
-        for (int row_index = 0; row_index < grid.get_rows_amount(); row_index++)
+        // --- Update Data ---
+        if (current_screen == "Main Menu")
         {
-            for (int col_index = 0; col_index < grid.get_columns_amount(); col_index++)
-            {
-                // Save the amount of entities in the current cell.
-                current_cell_entities_amount = grid_cells[row_index][col_index] -> get_entities_counter();
+            // Get the current position of the mouse.
+            mouse_point = GetMousePosition();
 
-                // Get the array of entities in the cell.
-                entities_in_cell = grid_cells[row_index][col_index] -> get_entities();
+            // The campain button was pressed.
+            if (CheckCollisionPointRec(mouse_point, campain_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                current_screen = "Map";
+            }
+        }
+        
+        else if (current_screen == "Map")
+        {
+            // Get the current position of the mouse.
+            mouse_point = GetMousePosition();
+
+            // The campain button was pressed.
+            if (CheckCollisionPointRec(mouse_point, world1_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                current_screen = "World 1";
+                continue;
+            }
+        }
+        
+        else if( current_screen == "World 1")
+        {
+            // Initialize world 1.
+            if (!is_screen_initialized)
+            {
+                my_fish = world1_my_fish;
+                fish_network = world1_fish_network;
+                grid = world1_grid;
+                camera = world1_camera;
                 
-                // Iterate over all the possible entities pairs in the current cell.
-                for (int first_entity_index = 0; first_entity_index < current_cell_entities_amount; first_entity_index++)
+                is_screen_initialized = true;
+            }
+            
+            // ----- Handle world 1 -----
+
+            // - Boundaries Management -
+
+            // Set the relevant boundaries for all the fish (its scaling considartions occurs within the fish update boundaries calls).
+            // Needs to be updated each frame becuase the scaling of the fish can be changed.
+            
+            // Update my fish.
+            if (debug) { my_fish.update_boundaries(0, world1.width, 0, world1.height, true); }
+            else { my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2, false); }
+            
+            // Update the fish network.
+            fish_network.update_boundaries(0, world1.width, 0, world1.height, true);
+            
+            // - User Input Management -
+            
+            // Handle arrow keys strokes. They move the fish in the world.
+            if (IsKeyDown(KEY_RIGHT)) { my_fish.move_right(); grid.refresh_entity(&my_fish); }
+            if (IsKeyDown(KEY_LEFT)) { my_fish.move_left(); grid.refresh_entity(&my_fish); }
+            if (IsKeyDown(KEY_UP)) { my_fish.move_up(); grid.refresh_entity(&my_fish); }
+            if (IsKeyDown(KEY_DOWN)) { my_fish.move_down(); grid.refresh_entity(&my_fish); }
+            
+            // --- Entities Calculations ---
+            
+            // Remove all the eaten fish from the previous frame.
+            fish_network.handle_eaten();
+            
+            // Release available fish.
+            fish_network.load_available_fish();
+            
+            // Move all the fish in the fish network.
+            fish_network.move();
+            
+            // --- Handle Collisions ---
+            
+            // A reference to the cells array.
+            grid_cells = grid.get_cells();
+            
+            // The entities array of the current cell.
+            GridEntity** entities_in_cell;
+            
+            // The rectangular frame of the two entities in the loop.
+            Rectangle first_entity_rectangle;
+            Rectangle second_entity_rectangle;    
+
+            // Iterate over the cells of the grid.
+            for (int row_index = 0; row_index < grid.get_rows_amount(); row_index++)
+            {
+                for (int col_index = 0; col_index < grid.get_columns_amount(); col_index++)
                 {
-                    for (int second_entity_index = first_entity_index + 1; second_entity_index < current_cell_entities_amount; second_entity_index++)
+                    // Save the amount of entities in the current cell.
+                    current_cell_entities_amount = grid_cells[row_index][col_index] -> get_entities_counter();
+
+                    // Get the array of entities in the cell.
+                    entities_in_cell = grid_cells[row_index][col_index] -> get_entities();
+                    
+                    // Iterate over all the possible entities pairs in the current cell.
+                    for (int first_entity_index = 0; first_entity_index < current_cell_entities_amount; first_entity_index++)
                     {
-                        // Get the rectangle frame of the two entities.
-                        first_entity_rectangle = entities_in_cell[first_entity_index] -> get_updated_rectangular_frame();
-                        second_entity_rectangle = entities_in_cell[second_entity_index] -> get_updated_rectangular_frame();
-                        
-                        // Check if the two current entities are overlapping.
-                        if (CheckCollisionRecs(first_entity_rectangle, second_entity_rectangle))
+                        for (int second_entity_index = first_entity_index + 1; second_entity_index < current_cell_entities_amount; second_entity_index++)
                         {
-                            // Tell the first entity it collided with the second entity.
-                            entities_in_cell[first_entity_index] -> handle_collision(entities_in_cell[second_entity_index]);
+                            // Get the rectangle frame of the two entities.
+                            first_entity_rectangle = entities_in_cell[first_entity_index] -> get_updated_rectangular_frame();
+                            second_entity_rectangle = entities_in_cell[second_entity_index] -> get_updated_rectangular_frame();
+                            
+                            // Check if the two current entities are overlapping.
+                            if (CheckCollisionRecs(first_entity_rectangle, second_entity_rectangle))
+                            {
+                                // Tell the first entity it collided with the second entity.
+                                entities_in_cell[first_entity_index] -> handle_collision(entities_in_cell[second_entity_index]);
+                            }
                         }
                     }
                 }
             }
+
+            // --- Camera ---
+            
+            // Camera follows my fish movement.
+            if (!debug) { camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y }; }
+            
+            // --- Prepare Gifs for drawing ---
+            
+            // Prepare all the fish to their next gif frame.
+            my_fish.set_next_frame();        
+            fish_network.set_next_frame();
+            
+            // Check if the game is over.
+            if (!my_fish.is_alive())
+            {
+                cout << "game over.\n";
+                break;
+            }
         }
 
-        // --- Camera ---
-        
-        // Camera follows my fish movement.
-        if (!debug) { camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y }; }
-        
-        // --- Prepare Gifs for drawing ---
-        
-        // Prepare all the fish to their next gif frame.
-		my_fish.set_next_frame();        
-        fish_network.set_next_frame();        
-        
-        // --- Draw ---
+        // ----- Draw -----
         
         BeginDrawing();
             
-            // Clear the background.
-            ClearBackground(RAYWHITE);
+            if (current_screen == "Main Menu")
+            {
+                // Clear the background.
+                ClearBackground(RAYWHITE);
+
+                // Draw the main menu image.
+                DrawTexture(main_menu, (int) floor (SCREEN_WIDTH / 2 - main_menu.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2), WHITE);
+                
+                // Draw the campain button.
+                DrawTexture(campain_button, campain_button_frame.x, campain_button_frame.y, WHITE);
+            }
+                    
+            else if (current_screen == "Map")
+            {
+                // Clear the background.
+                ClearBackground(RAYWHITE);
+
+                // Draw the map image.
+                DrawTexture(map, (int) floor (SCREEN_WIDTH / 2 - map.width / 2), (int) floor(SCREEN_HEIGHT / 2 - map.height / 2), WHITE);
+                
+                // Draw the world 1 button.
+                DrawTexture(world1_button, world1_button_frame.x, world1_button_frame.y, WHITE);
+            }
             
-            // Everything inside this scope, is being manipulated by the camera.
-            // Every drawing outside this scope, will show up on the screen without being transformed by the camera.
-            BeginMode2D(camera);
+            else if (current_screen == "World 1")
+            {
+                // Clear the background.
+                ClearBackground(RAYWHITE);
                 
-                // Draw the background.
-                DrawTexture(world1, 0, 0, WHITE);
-                
-                // Debug, print the grid.
-                if (debug)
-                {
-                    for (int row_index = 0; row_index < grid.get_rows_amount(); row_index++)
+                // Everything inside this scope, is being manipulated by the camera.
+                // Every drawing outside this scope, will show up on the screen without being transformed by the camera.
+                BeginMode2D(camera);
+                    
+                    // Draw the background.
+                    DrawTexture(world1, 0, 0, WHITE);
+                    
+                    // Debug, print the grid.
+                    if (debug)
                     {
-                        for (int col_index = 0; col_index < grid.get_columns_amount(); col_index++)
+                        for (int row_index = 0; row_index < grid.get_rows_amount(); row_index++)
                         {
-                            current_cell_entities_amount = grid_cells[row_index][col_index] -> get_entities_counter();
-                            if (current_cell_entities_amount > 0) { DrawRectangle(col_index * grid.get_cell_width_pixels(), row_index * grid.get_cell_height_pixels(), grid.get_cell_width_pixels(), grid.get_cell_height_pixels(), GRAY); }
-                            else { DrawRectangle(col_index * grid.get_cell_width_pixels(), row_index * grid.get_cell_height_pixels(), grid.get_cell_width_pixels(), grid.get_cell_height_pixels(), LIGHTGRAY); }
+                            for (int col_index = 0; col_index < grid.get_columns_amount(); col_index++)
+                            {
+                                current_cell_entities_amount = grid_cells[row_index][col_index] -> get_entities_counter();
+                                if (current_cell_entities_amount > 0) { DrawRectangle(col_index * grid.get_cell_width_pixels(), row_index * grid.get_cell_height_pixels(), grid.get_cell_width_pixels(), grid.get_cell_height_pixels(), GRAY); }
+                                else { DrawRectangle(col_index * grid.get_cell_width_pixels(), row_index * grid.get_cell_height_pixels(), grid.get_cell_width_pixels(), grid.get_cell_height_pixels(), LIGHTGRAY); }
+                            }
                         }
                     }
-                }
+                    
+                    // Debug, print the fish frames.
+                    if (debug)
+                    {
+                        fish_network.print_frames();
+                        Rectangle frame = my_fish.get_updated_rectangular_frame();
+                        DrawRectangle(frame.x,frame.y, frame.width, frame.height, RED);
+                    }
+                    
+                    // Draw the next gif frame of the fish.
+                    my_fish.draw_next_frame();
+                    fish_network.draw_next_frame();
                 
-                // Debug, print the fish frames.
-                if (debug)
-                {
-                    fish_network.print_frames();
-                    Rectangle frame = my_fish.get_updated_rectangular_frame();
-                    DrawRectangle(frame.x,frame.y, frame.width, frame.height, RED);
-                }
-                
-                // Draw the next gif frame of the fish.
-                my_fish.draw_next_frame();
-                fish_network.draw_next_frame();
+                // The end of the drawings affected by the camera.
+                EndMode2D();
+            }
             
-            // The end of the drawings affected by the camera.
-            EndMode2D();
-
         EndDrawing();
-        
-        // Check if the game is over.
-        if (!my_fish.is_alive())
-        {
-            break;
-        }
-        
-        // Let the threads manipulate the fish network.
-        //load_fish_mutex.unlock();
 	}
 	
 	// ----- Close Game -----
