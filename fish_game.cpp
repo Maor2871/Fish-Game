@@ -4,7 +4,6 @@
 #include <random>
 #include <cmath>
 #include <thread>
-#include <mutex>
 using namespace std;
 
 
@@ -465,13 +464,12 @@ class Grid
                 The rectangles are not rotated. 
                 This fact means that a rectangle is within a cell, if and only if the cell is between the y axis boundaries of the rectangle, as well as the x axis boundaries.
             */
+			
             // Get the location and size of the entity.
             Location location = new_entity -> get_location();
             Size size = new_entity -> get_size();
             float scale = new_entity -> get_scale();
-            
-            //{location.x - ((sqrt(scale) * size.width) / 2), location.y - ((sqrt(scale) * size.height) / 2), sqrt(scale) * size.width, sqrt(scale) * size.height}
-            
+
             // Calculate the current actual size of the entity.
             int width = (int) floor(sqrt(scale) * size.width);
             int height = (int) floor(sqrt(scale) * size.height);
@@ -754,32 +752,32 @@ class Fish : public MyGif
         // Apply movements (including boundaries check).
         void move_left() 
         {
-            if (location.x - speed_x < left_boundary) { boundary_exceed(); is_fish_out_of_bounds = true; }
+            if (location.x - speed_x < left_boundary) { location.x = left_boundary; boundary_exceed(); is_fish_out_of_bounds = true; }
             else { location.x -= speed_x; flip_horizontal(); }
         }
         
         void move_right() 
         {
-            if (location.x + speed_x > right_boundary) { boundary_exceed(); is_fish_out_of_bounds = true;}
+            if (location.x + speed_x > right_boundary) { location.x = right_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
             else { location.x += speed_x; unflip_horizontal(); }
         }
         
         void move_up() 
         {
-            if (location.y - speed_y < top_boundary) { boundary_exceed(); is_fish_out_of_bounds = true;}
+            if (location.y - speed_y < top_boundary) { location.y = top_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
             else { location.y -= speed_y; }
         }
         
         void move_down() 
         {
-            if (location.y + speed_y > bottom_boundary) {boundary_exceed(); is_fish_out_of_bounds = true;}
+            if (location.y + speed_y > bottom_boundary) { location.y = bottom_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
             else { location.y += speed_y; }
         }
         
         // The function receives new boundaries, and sets them as the new boundaries of the fish.
         void update_boundaries(int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, bool is_consider_size)
         {
-            // Note: the boundaries are compared to the current location of the fish, which consideres its center. Therefore the precise boundary would be calculated with half the current dimentions of the fish.
+            // Note: the boundaries are compared to the current location of the fish, which considers its center. Therefore the precise boundary would be calculated with half the current dimentions of the fish.
             if (is_consider_size)
             {
                 left_boundary = new_left_boundary - (int) floor(sqrt(scale) * size.width / 2);
@@ -1009,13 +1007,13 @@ class WanderFish : public Fish
             // The location should be at the left side of the world.
             if (is_initial_left_location)
             {
-                location.set_location(Location(left_boundary + size.width, y_coordinates));
+                location.set_location(Location(left_boundary, y_coordinates));
             }
             
             // The location should be at the right side of the world.
             else
             {
-                location.set_location(Location(right_boundary - size.width, y_coordinates));
+                location.set_location(Location(right_boundary, y_coordinates));
             }
         }
         
@@ -1155,13 +1153,10 @@ class FishNetwork
         int* proportions_lot;
         int lot_range;
         
-        // A mutex which gets unlocked when it is ok to add new fish to the fish array.
-        mutex* load_fish_mutex;
-        
     public:
 
         // Constructor.
-        FishNetwork(int new_max_population, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length, mutex* new_load_fish_mutex)
+        FishNetwork(int new_max_population, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length)
         {
             // The max population.
             max_population = new_max_population;
@@ -1179,10 +1174,7 @@ class FishNetwork
             // The available fish profiles to load lively.
             available_fish = new_available_fish;
             available_fish_length = new_available_fish_length;
-            
-            // Save the mutex.
-            load_fish_mutex = new_load_fish_mutex;
-            
+
             // Create the fish array.
             fish = new WanderFish*[max_population];
             current_fish_amount = 0;
@@ -1260,7 +1252,7 @@ class FishNetwork
             for (int i = 0; i < current_fish_amount; i++)
             {
                 // Update the boundaries of the current fish (taking the scaling into considerations)
-                fish[i] -> update_boundaries(left, right, top, bottom, is_consider_size);
+                fish[i] -> update_boundaries(left, right, top, bottom - (int) ceil(sqrt(fish[i] -> get_scale()) * fish[i] -> get_size().height), is_consider_size);
             }
         }
         
@@ -1398,18 +1390,12 @@ class FishNetwork
             // Create the fish.
             WanderFish* fish_to_load = new WanderFish(current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], 0, grid -> get_width_pixels(), 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, 0, current_fish_profile.is_facing_left_on_startup, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
             
-            // Wait until it is ok to save the new fish in the fish array.
-            load_fish_mutex -> lock();
-            
             // Save the fish in the fish array.
             fish[current_fish_amount] = fish_to_load;
             current_fish_amount++;
             
             // Add the fish to the grid.
             grid -> add_entity(fish_to_load);
-            
-            // That's it, release the mutex.
-            load_fish_mutex -> unlock();
         }
 
         // For Debugging.
@@ -1455,7 +1441,6 @@ int main()
     const int GRID_ROWS = 3;
     const int GRID_COLS = 8;
     bool debug = false;
-    mutex load_fish_mutex;
 
 	// ### --- GUI Initialization --- ###
 	
@@ -1465,7 +1450,7 @@ int main()
 	// Fps declaration.
 	SetTargetFPS(FPS);
     
-    // Set to full screen.
+    // Set to full screen and save dimensions in SCREEN_WIDTH, SCREEN_HEIGHT.
     int monitor = GetCurrentMonitor();
     SCREEN_WIDTH = GetMonitorWidth(monitor);
     SCREEN_HEIGHT = GetMonitorHeight(monitor);
@@ -1486,12 +1471,16 @@ int main()
     
     // # ----- Variables -----
 
+	Texture2D world;
     MyFish my_fish;
     FishNetwork fish_network;
     Grid grid;
     Camera2D camera;
+    int camera_pos_x = 0, camera_pos_y = 0;
     int current_cell_entities_amount;
     Cell*** grid_cells;
+	int my_fish_current_width, my_fish_current_height;
+    int camera_current_height = 0, camera_current_width = 0; 
     
     // # ----- Main Menu ----- #
     
@@ -1571,17 +1560,17 @@ int main()
     
     fish_profile fish_profiles_on_startup[] = {fish2};
     fish_profile available_fish[] = {fish1, fish2};
-    FishNetwork world1_fish_network = FishNetwork(FISH_POPULATION, &world1_grid, fish_profiles_on_startup, 1, available_fish, 2, &load_fish_mutex);
+    FishNetwork world1_fish_network = FishNetwork(FISH_POPULATION, &world1_grid, fish_profiles_on_startup, 1, available_fish, 2);
 
-    // ----- Final Setups World1 -----
+    // ----- Final Set-ups World1 -----
 
     // Add all the entities to the grid.
     world1_grid.add_entity(&world1_my_fish);
     
-    // Create and setup the camera.
+    // Create and set-up the camera.
     Camera2D world1_camera = { 0 };
     
-    if (debug)
+    if (false)
     {
         world1_camera.rotation = 0;
         world1_camera.zoom = 0.3;
@@ -1589,13 +1578,12 @@ int main()
     
     else
     {
-        world1_camera.target = (Vector2){ world1_my_fish.get_location().x, world1_my_fish.get_location().y };
-        world1_camera.offset = (Vector2){ SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+        world1_camera.target = (Vector2) { world1_my_fish.get_location().x, world1_my_fish.get_location().y };
+        world1_camera.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
         world1_camera.rotation = 0;
         world1_camera.zoom = 0.7;
     }
     
-
 	// ----- Game Loop -----
 	
 	// As long as the Esc button or exit button were not pressed, continue to the next frame.
@@ -1632,6 +1620,7 @@ int main()
             // Initialize world 1.
             if (!is_screen_initialized)
             {
+				world = world1;
                 my_fish = world1_my_fish;
                 fish_network = world1_fish_network;
                 grid = world1_grid;
@@ -1648,11 +1637,12 @@ int main()
             // Needs to be updated each frame becuase the scaling of the fish can be changed.
             
             // Update my fish.
-            if (debug) { my_fish.update_boundaries(0, world1.width, 0, world1.height, true); }
-            else { my_fish.update_boundaries((SCREEN_WIDTH / camera.zoom) / 2, world1.width - (SCREEN_WIDTH / camera.zoom) / 2, (SCREEN_HEIGHT / camera.zoom) / 2, world1.height - (SCREEN_HEIGHT / camera.zoom) / 2, false); }
-            
+            my_fish_current_width = (int) ceil(sqrt(my_fish.get_scale()) * my_fish.get_size().width);
+            my_fish_current_height = (int) ceil(sqrt(my_fish.get_scale()) * my_fish.get_size().height);
+            my_fish.update_boundaries(ceil(my_fish_current_width / 2), world.width - ceil(my_fish_current_width / 2), ceil(my_fish_current_height / 2), world.height - ceil(my_fish_current_height / 2), false);
+        
             // Update the fish network.
-            fish_network.update_boundaries(0, world1.width, 0, world1.height, true);
+            fish_network.update_boundaries(0, world.width, 0, world.height, true);
             
             // - User Input Management -
             
@@ -1718,9 +1708,19 @@ int main()
 
             // --- Camera ---
             
-            // Camera follows my fish movement.
-            if (!debug) { camera.target = (Vector2){ my_fish.get_location().x, my_fish.get_location().y }; }
+            // Calculate the width and height of the camera screen (changed due to camera.zoom).
+            camera_current_width = (1 / camera.zoom) * SCREEN_WIDTH;
+            camera_current_height = (1 / camera.zoom) * SCREEN_HEIGHT;
             
+            // Camera follows my fish movement.
+            
+            // If the fish is not close to the boundaries.
+            if (my_fish.get_location().x - ceil(camera_current_width / 2) >= 0 && my_fish.get_location().x + ceil(camera_current_width / 2) < world.width) { camera_pos_x = my_fish.get_location().x; }
+            if (my_fish.get_location().y - ceil(camera_current_height / 2) >= 0 && my_fish.get_location().y + ceil(camera_current_height / 2) < world.height) { camera_pos_y = my_fish.get_location().y; }
+
+            // Update the camera position.
+            camera.target = (Vector2){ camera_pos_x, camera_pos_y };
+
             // --- Prepare Gifs for drawing ---
             
             // Prepare all the fish to their next gif frame.
@@ -1773,7 +1773,7 @@ int main()
                 BeginMode2D(camera);
                     
                     // Draw the background.
-                    DrawTexture(world1, 0, 0, WHITE);
+                    DrawTexture(world, 0, 0, WHITE);
                     
                     // Debug, print the grid.
                     if (debug)
@@ -1800,7 +1800,7 @@ int main()
                     // Draw the next gif frame of the fish.
                     my_fish.draw_next_frame();
                     fish_network.draw_next_frame();
-                
+
                 // The end of the drawings affected by the camera.
                 EndMode2D();
             }
