@@ -662,7 +662,7 @@ class MyGif: public GridEntity
             Rectangle destination = {location.x, location.y, (int) floor(sqrt(scale) * size.width), (int) floor(sqrt(scale) * size.height)};
             
             // We want the gif to be rotated in relation to its center, and we want that the inputed location in the destination rectangle will be the center.
-            Vector2 center = {(sqrt(scale) * size.width) / 2, (sqrt(scale) * size.width) / 2};
+            Vector2 center = {(sqrt(scale) * size.width) / 2, (sqrt(scale) * size.height) / 2};
             
             // Draw the next frame of the gif properly.
             DrawTexturePro(my_gif_texture, source, destination, center, rotation, WHITE);
@@ -853,6 +853,7 @@ class Fish : public MyGif
                     // Ignore the collision.
                     return;
                 }
+                
                 // The size in width of the current fish.
                 int my_size = (int) floor(size.width * size.height * scale);
             
@@ -1440,7 +1441,7 @@ int main()
     const int FISH_POPULATION = 10;
     const int GRID_ROWS = 3;
     const int GRID_COLS = 8;
-    bool debug = false;
+    bool debug = true;
 
 	// ### --- GUI Initialization --- ###
 	
@@ -1520,7 +1521,7 @@ int main()
     // --- my fish ---
     
     Cell** cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world1_my_fish = MyFish(my_fish_image, &my_fish_image_frames_amount, Location(world1.width / 2, world1.height / 2), Size(300, 300), 15, 12, 0, 0, 0, 0, 1, 30, 0, true, FISH_POPULATION, cells_within_my_fish);
+    MyFish world1_my_fish = MyFish(my_fish_image, &my_fish_image_frames_amount, Location(world1.width / 2, world1.height / 2), Size(326, 233), 15, 12, 0, 0, 0, 0, 1, 30, 0, true, FISH_POPULATION, cells_within_my_fish);
 
     // --- Fish Network ---
    
@@ -1539,7 +1540,7 @@ int main()
     paths_stack fish1_paths_stack_wander_left = {Location(), 1, fish1_wander_left_paths, false, false, false};
     
     paths_stack fish1_paths_stacks[] = {fish1_paths_stack_wander_right, fish1_paths_stack_wander_left};
-    fish_profile fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(150, 150), 3, 4, 30, 0, 2, 30, 300, 2, fish1_paths_stacks, 10};
+    fish_profile fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(150, 129), 3, 4, 30, 0, 2, 30, 300, 2, fish1_paths_stacks, 10};
     
     // - Fish 2 -
     
@@ -1554,7 +1555,7 @@ int main()
     paths_stack fish2_paths_stack_wander_left = {Location(), 1, fish2_wander_left_paths, false, false, false};
     
     paths_stack fish2_paths_stacks[] = {fish2_paths_stack_wander_right, fish2_paths_stack_wander_left};
-    fish_profile fish2 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(600, 600), 3, 4, 10, 0, 2, 30, 300, 2, fish2_paths_stacks, 1};
+    fish_profile fish2 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(640, 552), 1, 4, 10, 0, 2, 30, 300, 2, fish2_paths_stacks, 1};
     
     // -- Setup --
     
@@ -1564,9 +1565,6 @@ int main()
 
     // ----- Final Set-ups World1 -----
 
-    // Add all the entities to the grid.
-    world1_grid.add_entity(&world1_my_fish);
-    
     // Create and set-up the camera.
     Camera2D world1_camera = { 0 };
     
@@ -1625,8 +1623,8 @@ int main()
                 fish_network = world1_fish_network;
                 grid = world1_grid;
                 camera = world1_camera;
-                
                 is_screen_initialized = true;
+                grid.refresh_entity(&my_fish);
             }
             
             // ----- Handle world 1 -----
