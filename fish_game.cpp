@@ -172,7 +172,7 @@ struct fish_profile
     string fish_type;
     bool is_facing_left_on_startup;
     Size size;
-    int max_scaling;
+    float max_scaling;
     float min_speed_x;
     float max_speed_x;
     float min_speed_y;
@@ -180,6 +180,8 @@ struct fish_profile
     int min_frames_per_path;
     int max_frames_per_path;
     float can_eat_ratio;
+    float cant_eat_ratio;
+    bool is_randomize_initial_scale;
     
     // - Possible paths stacks
     
@@ -716,11 +718,14 @@ class Fish : public MyGif
         
         // Can eat fish that are <can_eat_ratio> my size and greater.
         float can_eat_ratio;
+        
+        // Can't eat fish that are <cant_eat_ratio> and less my size.
+        float cant_eat_ratio;
        
     public:
         
         // Counstructor.
-        Fish(Image new_my_fish_image, int* new_frames_amount, string new_fish_type, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : MyGif(new_my_fish_image, new_frames_amount, "Fish", new_location, new_size, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        Fish(Image new_my_fish_image, int* new_frames_amount, string new_fish_type, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : MyGif(new_my_fish_image, new_frames_amount, "Fish", new_location, new_size, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // Save the type of the fish.
             fish_type = new_fish_type;
@@ -746,6 +751,9 @@ class Fish : public MyGif
             
             // The ratio of fish size can eat.
             can_eat_ratio = new_can_eat_ratio;
+            
+            // The ratio of fish size can't eat.
+            cant_eat_ratio = new_cant_eat_ratio;
         }
 
         // Default Constructor.
@@ -827,8 +835,11 @@ class Fish : public MyGif
         }
         
         // The function receives the amount of pixels were eaten by the fish (simply calculation of width, height and scale of the eaten entity), and increases the size of the fish.
-        void eat (int pixels)
+        bool eat (int pixels)
         {
+            // Cannot eat, already max size.
+            if (scale == max_scale) { return false; }
+            
             // Use the ratio to decide how much of the recieved pixels to digest.
             pixels = (int) floor(pixels * eat_grow_ratio);
             
@@ -847,7 +858,12 @@ class Fish : public MyGif
             }
             
             // The new scale is the current width + the added pixels / the original width of the fish.
-            scale =  pow(((size.width * sqrt(scale)) + full_loops_counter + ( (double) pixels / current_pixels_for_loop) ) / size.width, 2);
+            float new_scale = (float) pow(((size.width * sqrt(scale)) + full_loops_counter + ( (double) pixels / current_pixels_for_loop) ) / size.width, 2);
+            if (new_scale > max_scale) { scale = max_scale; }
+            else { scale = new_scale; }
+            
+            // Scaled up.
+            return true;
         }
         
         // The function is being called when the fish is getting eaten.
@@ -857,7 +873,9 @@ class Fish : public MyGif
             is_eaten = true;
         }
         
+        // Eat ratio getters.
         float get_can_eat_ratio() { return can_eat_ratio; }
+        float get_cant_eat_ratio() { return cant_eat_ratio; }
         
         // The function handles a collision between the fish and another GridEntity (Note that a collision between two entities is called only once).
         void handle_collision(GridEntity* collided_with_entity)
@@ -879,23 +897,17 @@ class Fish : public MyGif
                 int other_size = (int) floor(collided_with_entity -> get_size().width * collided_with_entity -> get_size().height * collided_with_entity -> get_scale());
 
                 // Check if the current fish can eat the other one.
-                if (my_size * can_eat_ratio > other_size && other_size * ((Fish*) collided_with_entity) -> get_can_eat_ratio() < my_size)
+                if (my_size > other_size * can_eat_ratio && my_size < other_size * cant_eat_ratio)
                 {
-                    // The current fish is getting bigger.
-                    eat(other_size);
-
-                    // The other fish is getting eaten.
-                    ((Fish*) collided_with_entity) -> eaten();
+                    // Try to eat, if ate, update eaten.
+                    if (eat(other_size)) { ((Fish*) collided_with_entity) -> eaten(); }
                 }
                 
                 // Check if the other fish can eat the current one.
-                else if (other_size * ((Fish*) collided_with_entity) -> get_can_eat_ratio() > my_size && my_size * can_eat_ratio < other_size)
+                else if (other_size > my_size * ((Fish*) collided_with_entity) -> get_can_eat_ratio() && other_size < my_size * ((Fish*) collided_with_entity) -> get_cant_eat_ratio())
                 {
-                    // The other fish is getting bigger.
-                    ((Fish*)collided_with_entity) -> eat(my_size);
-
-                    // The current fish is getting eaten.
-                    eaten();
+                    // Try to eat, if ate, update eaten.
+                    if (((Fish*)collided_with_entity) -> eat(my_size)) { eaten(); }
                 }
             }           
         }
@@ -909,6 +921,21 @@ class MyFish : public Fish
     */
     
     protected:
+
+        // The speed multiplier when turbo is on.
+        float turbo;
+        
+        // How many frames the turbo last.
+        int turbo_duration_frames;
+        
+        // How many frames left till the end of the current turbo.
+        int turbo_duration_frames_left;
+        
+        // How many frames last to finish the turbo reloading.
+        int turbo_reload_frames_left;
+        
+        // How many frames it takes to revive the turbo.
+        int turbo_reload_frames;
     
         // When my fish reach that scale, victory.
         float required_scale;
@@ -921,16 +948,33 @@ class MyFish : public Fish
         
         // The stroke of the scale widget.
         int scale_widget_stroke;
+        
+        // Where on the screen to draw the scale widget.
+        Location turbo_widget_location;
+        
+        // The size of the scale widget.
+        Size turbo_widget_size;
+        
+        // The stroke of the scale widget.
+        int turbo_widget_stroke;
     
     public:
     
         // Constructor.
-        MyFish(Image new_my_fish_image, int* new_frames_amount, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_required_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within, Location new_scale_widget_location, Size new_scale_sidget_size, int new_scale_widget_stroke) : Fish(new_my_fish_image, new_frames_amount, "my fish", new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_required_scale, new_eat_grow_ratio, new_can_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        MyFish(Image new_my_fish_image, int* new_frames_amount, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_required_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within, Location new_scale_widget_location, Size new_scale_sidget_size, int new_scale_widget_stroke, float new_turbo, int new_turbo_duration_frames, int new_turbo_reload_frames, Location new_turbo_widget_location, Size new_turbo_widget_size, int new_turbo_widget_stroke) : Fish(new_my_fish_image, new_frames_amount, "my fish", new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_required_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             required_scale = new_required_scale;
             scale_widget_location.set_location(new_scale_widget_location);
             scale_widget_size = new_scale_sidget_size;
             scale_widget_stroke = new_scale_widget_stroke;
+            turbo = new_turbo;
+            turbo_duration_frames = new_turbo_duration_frames;
+            turbo_duration_frames_left = 0;
+            turbo_reload_frames = new_turbo_reload_frames;
+            turbo_reload_frames_left = 0;
+            turbo_widget_location = new_turbo_widget_location;
+            turbo_widget_size = new_turbo_widget_size;
+            turbo_widget_stroke = new_turbo_widget_stroke;
         }
         
         // Default Constructor.
@@ -959,6 +1003,41 @@ class MyFish : public Fish
             
             // Draw the fill rectangle.
             DrawRectangle(scale_widget_location.x, scale_widget_location.y, scale_widget_size.width * (scale / required_scale), scale_widget_size.height, RED);
+        }
+        
+        // If available, applies the turbo.
+        void apply_turbo()
+        {
+            if (turbo_reload_frames_left == 0) 
+            {
+                turbo_reload_frames_left = turbo_reload_frames;
+                turbo_duration_frames_left = turbo_duration_frames;
+                speed_x *= turbo;
+                speed_y *= turbo;
+            }
+        }
+        
+        // Sets another frame of turbo.
+        void update_turbo()
+        {
+            if (turbo_reload_frames_left > 0) { turbo_reload_frames_left--; }
+            if (turbo_duration_frames_left == 1) { speed_x /= turbo; speed_y /= turbo; }
+            if (turbo_duration_frames_left > 0) { turbo_duration_frames_left--; }
+        }
+        
+        void draw_turbo_widget()
+        {
+            // Draw the turbo title.
+            DrawText("Turbo", turbo_widget_location.x - 75, turbo_widget_location.y, 25, BLACK);
+            
+            // Draw the turbo rectangle.
+            DrawRectangle(turbo_widget_location.x - turbo_widget_stroke, turbo_widget_location.y - turbo_widget_stroke, turbo_widget_size.width + 2 * turbo_widget_stroke, turbo_widget_size.height + 2 * turbo_widget_stroke, BLACK);
+            
+            // Draw the container rectangle.
+            DrawRectangle(turbo_widget_location.x, turbo_widget_location.y, turbo_widget_size.width, turbo_widget_size.height, WHITE);
+            
+            // Draw the fill rectangle.
+            DrawRectangle(turbo_widget_location.x, turbo_widget_location.y, (int) (turbo_widget_size.width * ((float)(turbo_reload_frames - turbo_reload_frames_left) / turbo_reload_frames)), turbo_widget_size.height, RED);
         }
 };
 
@@ -997,7 +1076,7 @@ class WanderFish : public Fish
         // Constructor.
         // new_paths_count_in_paths_stack should state the number of stacks which are saved in the received paths_stack.
         // The location is relevant if there is no paths_stack or is_initial_location is false;
-        WanderFish(Image new_wander_fish_image, int* new_frames_amount, string new_fish_type, Location new_location, bool is_initial_left_location, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : Fish(new_wander_fish_image, new_frames_amount, new_fish_type, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_eat_grow_ratio, new_can_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        WanderFish(Image new_wander_fish_image, int* new_frames_amount, string new_fish_type, Location new_location, bool is_initial_left_location, bool is_randomize_x_coord, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, bool is_randomize_initial_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_x_offset, int new_max_cells_within, Cell** new_cells_within) : Fish(new_wander_fish_image, new_frames_amount, new_fish_type, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // Set the range of speeds on both axes.
             min_speed_x = new_min_speed_x;
@@ -1008,6 +1087,9 @@ class WanderFish : public Fish
             // Set the range of a new path frames.
             min_path_frames = new_min_path_frames;
             max_path_frames = new_max_path_frames;
+            
+            // If true, randomizing the initial scale.
+            if (is_randomize_initial_scale) { scale = max(1, rand() % (int) floor(max_scale * 1000 - 1000) / 1000 + 1);  }
             
             // Set the paths stack, and save the number of elements in it.
             my_paths_stack = new_paths_stack;
@@ -1020,7 +1102,7 @@ class WanderFish : public Fish
                 if (my_paths_stack.is_initial_location) { location.set_location(my_paths_stack.initial_location); }
                 
                 // Otherwise, randomize it.
-                else { set_random_initial_location(is_initial_left_location); }
+                else { set_random_initial_location(is_initial_left_location, is_randomize_x_coord, new_x_offset); }
                 
                 // Set the first path as the current path.
                 current_path = my_paths_stack.paths[0];
@@ -1034,7 +1116,7 @@ class WanderFish : public Fish
             {
                 current_path = generate_new_path();
                 
-                set_random_initial_location(is_initial_left_location);
+                set_random_initial_location(is_initial_left_location, is_randomize_x_coord, new_x_offset);
             }
             
             // Update the properties of the wander fish to match the properties of the current path.
@@ -1055,24 +1137,39 @@ class WanderFish : public Fish
         }
         
         // The function sets a random initial_location.
-        void set_random_initial_location(bool is_initial_left_location)
+        void set_random_initial_location(bool is_initial_left_location, bool is_randomize_x_coord, int x_coord_offset)
         {
             // Randomize the location of the y axis.
-            int y_coordinates;
+            int y_coordinates = 0;
             if (bottom_boundary - top_boundary <= 0) { y_coordinates = top_boundary + size.height; }
             else { y_coordinates = rand() % (bottom_boundary - top_boundary) + top_boundary; }
-
-            // The location should be at the left side of the world.
-            if (is_initial_left_location)
-            {
-                location.set_location(Location(left_boundary, y_coordinates));
+            
+            // The x coordination.
+            int x_coordinates = 0;
+            
+            // If random x coord is required.
+            if (is_randomize_x_coord)
+            {               
+                // Randomize the x coordination.
+                if (right_boundary - left_boundary <= 0) { x_coordinates = left_boundary; }
+                else { x_coordinates = rand() % (right_boundary - left_boundary) + left_boundary; }
             }
             
-            // The location should be at the right side of the world.
+            // Left or right x coordinate is required.
             else
             {
-                location.set_location(Location(right_boundary, y_coordinates));
+                // Randomize the x_coord_offset.
+                x_coord_offset = rand() % (x_coord_offset);
+                
+                // The location should be at the left side of the world.
+                if (is_initial_left_location) { x_coordinates = left_boundary + x_coord_offset; }
+                
+                // The location should be at the right side of the world.
+                else { x_coordinates = right_boundary - x_coord_offset; }
             }
+            
+            // Set the initial location.
+            location.set_location(Location(x_coordinates, y_coordinates));
         }
         
         // The function generates the next move of the wandering fish.
@@ -1214,16 +1311,22 @@ class FishNetwork
         int* proportions_lot;
         int lot_range;
         
+        // The x coordinate offset of new fish initialization.
+        int x_coord_offset;
+        
     public:
 
         // Constructor.
-        FishNetwork(int new_max_population, float new_eat_grow_ratio, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length)
+        FishNetwork(int new_max_population, float new_eat_grow_ratio, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length, int new_x_coord_offset)
         {
             // The max population.
             max_population = new_max_population;
             
             // Save the eat grow ratio in the world.
             eat_grow_ratio = new_eat_grow_ratio;
+            
+            // Set the x coordination offset.
+            x_coord_offset = new_x_coord_offset;
             
             // The current population.
             current_population = 0;
@@ -1275,14 +1378,14 @@ class FishNetwork
         {           
             // Load all the fish on startup.
             for (int i = 0; i < fish_on_startup_length; i++)
-                load_fish_profile(fish_on_startup[i]);
+                load_fish_profile(fish_on_startup[i], true);
             
             // Add fish to the fish network, to fill the max fish population.
-            load_available_fish();
+            load_available_fish(true);
         }
         
         // The function loads available fish up to the max fish population.
-        void load_available_fish()
+        void load_available_fish(bool is_on_setup)
         {
             // Keep loading fish up to the max population.
             while (current_fish_amount < max_population)
@@ -1302,7 +1405,7 @@ class FishNetwork
                     if (random_lot < lots_sum)
                     {
                         // Load the lotted fish.
-                        load_fish_profile(available_fish[i]);
+                        load_fish_profile(available_fish[i], is_on_setup);
                         break;
                     }
                 }
@@ -1419,7 +1522,7 @@ class FishNetwork
         }
         
         // The function receives a fish profile and loads it to the fish network.
-        void load_fish_profile(fish_profile current_fish_profile)
+        void load_fish_profile(fish_profile current_fish_profile, bool is_on_setup)
         {
             // Randomize a path stack from the paths_stack array of the fish profile.
             int random_paths_stack_index = rand() % current_fish_profile.paths_stacks_amount;
@@ -1428,7 +1531,7 @@ class FishNetwork
             Cell** cells_within = new Cell*[grid -> get_rows_amount() * grid -> get_columns_amount()];
             
             // Create the fish.
-            WanderFish* fish_to_load = new WanderFish(current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], 0, grid -> get_width_pixels(), 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, eat_grow_ratio, current_fish_profile.can_eat_ratio, 0, current_fish_profile.is_facing_left_on_startup, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
+            WanderFish* fish_to_load = new WanderFish(current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, is_on_setup, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], - x_coord_offset, grid -> get_width_pixels() + x_coord_offset, 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, current_fish_profile.is_randomize_initial_scale, eat_grow_ratio, current_fish_profile.can_eat_ratio, current_fish_profile.cant_eat_ratio, 0, current_fish_profile.is_facing_left_on_startup, x_coord_offset, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
 
             // Save the fish in the fish array.
             fish[current_fish_amount] = fish_to_load;
@@ -1474,14 +1577,26 @@ int main()
     const char* PATH_WORLD1_BUTTON = "Textures/Menus/Map/World 1 Button.png";
     const char* PATH_MY_FISH = "Textures/Fish/My Fish/My Fish.gif";
     const char* PATH_WORLD1 = "Textures/Worlds/World 1/World 1.png";
-    const char* PATH_FISH1 = "Textures/Fish/Fish 3/fish 3.gif";
+    const char* PATH_FISH1 = "Textures/Fish/Fish 1/fish 1.gif";
+    const char* PATH_FISH2 = "Textures/Fish/Fish 2/fish 2.gif";
+    const char* PATH_FISH3 = "Textures/Fish/Fish 3/fish 3.gif";
+    const char* PATH_FISH4 = "Textures/Fish/Fish 4/fish 4.gif";
+    const char* PATH_FISH5 = "Textures/Fish/Fish 5/fish 5.gif";
+    const char* PATH_FISH6 = "Textures/Fish/Fish 6/fish 6.gif";
+    const char* PATH_FISH7 = "Textures/Fish/Fish 7/fish 7.gif";
+    const char* PATH_FISH8 = "Textures/Fish/Fish 8/fish 8.gif";
+    const char* PATH_FISH9 = "Textures/Fish/Fish 9/fish 9.gif";
+    const char* PATH_FISH10 = "Textures/Fish/Fish 10/fish 10.gif";
+    const char* PATH_FISH11 = "Textures/Fish/Fish 11/fish 11.gif";
     
     // - Game Properties
-    const int FISH_POPULATION = 30;
+    const int FISH_POPULATION = 50;
     const int GRID_ROWS = 3;
     const int GRID_COLS = 8;
     float EAT_GROW_RATIO = 0.5;
-    bool debug = true;
+    const int X_COORD_OFFSET = 1000;
+    bool debug = false;
+    bool debug_camera = false;
 
 	// ### --- GUI Initialization --- ###
 	
@@ -1509,6 +1624,36 @@ int main()
     
     int fish1_image_frames_amount;
     Image fish1_image = LoadImageAnim(PATH_FISH1, &fish1_image_frames_amount);
+    
+    int fish2_image_frames_amount;
+    Image fish2_image = LoadImageAnim(PATH_FISH2, &fish2_image_frames_amount);
+    
+    int fish3_image_frames_amount;
+    Image fish3_image = LoadImageAnim(PATH_FISH3, &fish3_image_frames_amount);
+    
+    int fish4_image_frames_amount;
+    Image fish4_image = LoadImageAnim(PATH_FISH4, &fish4_image_frames_amount);
+    
+    int fish5_image_frames_amount;
+    Image fish5_image = LoadImageAnim(PATH_FISH5, &fish5_image_frames_amount);
+    
+    int fish6_image_frames_amount;
+    Image fish6_image = LoadImageAnim(PATH_FISH6, &fish6_image_frames_amount);
+    
+    int fish7_image_frames_amount;
+    Image fish7_image = LoadImageAnim(PATH_FISH7, &fish7_image_frames_amount);
+    
+    int fish8_image_frames_amount;
+    Image fish8_image = LoadImageAnim(PATH_FISH8, &fish8_image_frames_amount);
+    
+    int fish9_image_frames_amount;
+    Image fish9_image = LoadImageAnim(PATH_FISH9, &fish9_image_frames_amount);
+    
+    int fish10_image_frames_amount;
+    Image fish10_image = LoadImageAnim(PATH_FISH10, &fish10_image_frames_amount);
+    
+    int fish11_image_frames_amount;
+    Image fish11_image = LoadImageAnim(PATH_FISH11, &fish11_image_frames_amount);
     
     // # ----- Variables -----
 
@@ -1561,7 +1706,7 @@ int main()
     // --- my fish ---
     
     Cell** cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world1_my_fish = MyFish(my_fish_image, &my_fish_image_frames_amount, Location(world1.width / 2, world1.height / 2), Size(326, 233), 15, 12, 0, 0, 0, 0, 1, 7, EAT_GROW_RATIO, 1.2, 0, true, FISH_POPULATION, cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1);
+    MyFish world1_my_fish = MyFish(my_fish_image, &my_fish_image_frames_amount, Location(world1.width / 2, world1.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1);
 
     // --- Fish Network ---
    
@@ -1569,18 +1714,19 @@ int main()
     
     // - Fish 1 -
     
-    // Right
+    // Right.
     fish_path fish1_path_wander_right = {10, 0, true, true, 100};
     fish_path fish1_wander_right_paths[] = {fish1_path_wander_right};
     paths_stack fish1_paths_stack_wander_right = {Location(), 1, fish1_wander_right_paths, false, false, true};
     
-    // Left
+    // Left.
     fish_path fish1_path_wander_left = {10, 0, false, true, 100};
     fish_path fish1_wander_left_paths[] = {fish1_path_wander_left};
     paths_stack fish1_paths_stack_wander_left = {Location(), 1, fish1_wander_left_paths, false, false, false};
     
+    // Fish profile.
     paths_stack fish1_paths_stacks[] = {fish1_paths_stack_wander_right, fish1_paths_stack_wander_left};
-    fish_profile fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(150, 129), 3, 4, 30, 0, 2, 30, 300, 1.2, 2, fish1_paths_stacks, 10};
+    fish_profile fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, fish1_paths_stacks, 1};
     
     // - Fish 2 -
     
@@ -1594,24 +1740,172 @@ int main()
     fish_path fish2_wander_left_paths[] = {fish2_path_wander_left};
     paths_stack fish2_paths_stack_wander_left = {Location(), 1, fish2_wander_left_paths, false, false, false};
     
+    // Fish profile.
     paths_stack fish2_paths_stacks[] = {fish2_paths_stack_wander_right, fish2_paths_stack_wander_left};
-    fish_profile fish2 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(640, 552), 1, 4, 10, 0, 2, 30, 300, 1.2, 2, fish2_paths_stacks, 1};
+    fish_profile fish2 = {fish2_image, &fish2_image_frames_amount, "fish 2", false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, fish2_paths_stacks, 0.6};
+    
+    // - Fish 3 -
+    
+    // Right
+    fish_path fish3_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish3_wander_right_paths[] = {fish3_path_wander_right};
+    paths_stack fish3_paths_stack_wander_right = {Location(), 1, fish3_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish3_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish3_wander_left_paths[] = {fish3_path_wander_left};
+    paths_stack fish3_paths_stack_wander_left = {Location(), 1, fish3_wander_left_paths, false, false, false};
+    
+    // Fish profile.
+    paths_stack fish3_paths_stacks[] = {fish3_paths_stack_wander_right, fish3_paths_stack_wander_left};
+    fish_profile fish3 = {fish3_image, &fish3_image_frames_amount, "fish 3", true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, fish3_paths_stacks, 1};
+    
+    // - Fish 4 -
+    
+    // Right
+    fish_path fish4_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish4_wander_right_paths[] = {fish4_path_wander_right};
+    paths_stack fish4_paths_stack_wander_right = {Location(), 1, fish4_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish4_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish4_wander_left_paths[] = {fish4_path_wander_left};
+    paths_stack fish4_paths_stack_wander_left = {Location(), 1, fish4_wander_left_paths, false, false, false};
+    
+    // Fish profile.
+    paths_stack fish4_paths_stacks[] = {fish4_paths_stack_wander_right, fish4_paths_stack_wander_left};
+    fish_profile fish4 = {fish4_image, &fish4_image_frames_amount, "fish 4", true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, fish4_paths_stacks, 1.5};
+    
+    // - Fish 5 -
+    
+    // Right
+    fish_path fish5_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish5_wander_right_paths[] = {fish5_path_wander_right};
+    paths_stack fish5_paths_stack_wander_right = {Location(), 1, fish5_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish5_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish5_wander_left_paths[] = {fish5_path_wander_left};
+    paths_stack fish5_paths_stack_wander_left = {Location(), 1, fish5_wander_left_paths, false, false, false};
+    
+    // Fish profile.
+    paths_stack fish5_paths_stacks[] = {fish5_paths_stack_wander_right, fish5_paths_stack_wander_left};
+    fish_profile fish5 = {fish5_image, &fish5_image_frames_amount, "fish 5", true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, fish5_paths_stacks, 1};
+    
+    // - Fish 6 -
+    
+    // Right
+    fish_path fish6_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish6_wander_right_paths[] = {fish6_path_wander_right};
+    paths_stack fish6_paths_stack_wander_right = {Location(), 1, fish6_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish6_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish6_wander_left_paths[] = {fish6_path_wander_left};
+    paths_stack fish6_paths_stack_wander_left = {Location(), 1, fish6_wander_left_paths, false, false, false};
+    
+    // Fish profile.
+    paths_stack fish6_paths_stacks[] = {fish6_paths_stack_wander_right, fish6_paths_stack_wander_left};
+    fish_profile fish6 = {fish6_image, &fish6_image_frames_amount, "fish 6", false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, fish6_paths_stacks, 0.6};
+    
+    // - Fish 7 -
+    
+    // Right
+    fish_path fish7_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish7_wander_right_paths[] = {fish7_path_wander_right};
+    paths_stack fish7_paths_stack_wander_right = {Location(), 1, fish7_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish7_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish7_wander_left_paths[] = {fish7_path_wander_left};
+    paths_stack fish7_paths_stack_wander_left = {Location(), 1, fish7_wander_left_paths, false, false, false};
+    
+    // Fish profile.
+    paths_stack fish7_paths_stacks[] = {fish7_paths_stack_wander_right, fish7_paths_stack_wander_left};
+    fish_profile fish7 = {fish7_image, &fish7_image_frames_amount, "fish 7", true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, fish7_paths_stacks, 0.33};
+    
+    // - Fish 8 -
+    
+    // Right
+    fish_path fish8_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish8_wander_right_paths[] = {fish8_path_wander_right};
+    paths_stack fish8_paths_stack_wander_right = {Location(), 1, fish8_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish8_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish8_wander_left_paths[] = {fish8_path_wander_left};
+    paths_stack fish8_paths_stack_wander_left = {Location(), 1, fish8_wander_left_paths, false, false, false};
+    
+    // Fish profile.
+    paths_stack fish8_paths_stacks[] = {fish8_paths_stack_wander_right, fish8_paths_stack_wander_left};
+    fish_profile fish8 = {fish8_image, &fish8_image_frames_amount, "fish 8", true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, fish8_paths_stacks, 1.5};
+    
+    // - Fish 9 -
+    
+    // Right
+    fish_path fish9_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish9_wander_right_paths[] = {fish9_path_wander_right};
+    paths_stack fish9_paths_stack_wander_right = {Location(), 1, fish9_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish9_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish9_wander_left_paths[] = {fish9_path_wander_left};
+    paths_stack fish9_paths_stack_wander_left = {Location(), 1, fish9_wander_left_paths, false, false, false};
+    
+    // Fish profile.
+    paths_stack fish9_paths_stacks[] = {fish9_paths_stack_wander_right, fish9_paths_stack_wander_left};
+    fish_profile fish9 = {fish9_image, &fish9_image_frames_amount, "fish 9", true, Size(150, 123), 3, 6, 13, 0, 2, 30, 300, 1.2, 2, true, 2, fish9_paths_stacks, 0.33};
+    
+    // - Fish 10 -
+    
+    // Right
+    fish_path fish10_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish10_wander_right_paths[] = {fish10_path_wander_right};
+    paths_stack fish10_paths_stack_wander_right = {Location(), 1, fish10_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish10_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish10_wander_left_paths[] = {fish10_path_wander_left};
+    paths_stack fish10_paths_stack_wander_left = {Location(), 1, fish10_wander_left_paths, false, false, false};
+    
+    // Fish profile.
+    paths_stack fish10_paths_stacks[] = {fish10_paths_stack_wander_right, fish10_paths_stack_wander_left};
+    fish_profile fish10 = {fish10_image, &fish10_image_frames_amount, "fish 10", false, Size(300, 287), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, fish10_paths_stacks, 0.1};
+    
+    // - Fish 11 -
+    
+    // Right
+    fish_path fish11_path_wander_right = {10, 0, true, true, 100};
+    fish_path fish11_wander_right_paths[] = {fish11_path_wander_right};
+    paths_stack fish11_paths_stack_wander_right = {Location(), 1, fish11_wander_right_paths, false, false, true};
+    
+    // Left
+    fish_path fish11_path_wander_left = {10, 0, false, true, 100};
+    fish_path fish11_wander_left_paths[] = {fish11_path_wander_left};
+    paths_stack fish11_paths_stack_wander_left = {Location(), 1, fish11_wander_left_paths, false, false, false};
+    
+    // Fish profile.
+    paths_stack fish11_paths_stacks[] = {fish11_paths_stack_wander_right, fish11_paths_stack_wander_left};
+    fish_profile fish11 = {fish11_image, &fish11_image_frames_amount, "fish 11", true, Size(300, 255), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, fish11_paths_stacks, 0.1};
     
     // -- Setup --
     
-    fish_profile fish_profiles_on_startup[] = {fish2};
-    fish_profile available_fish[] = {fish1, fish2};
-    FishNetwork world1_fish_network = FishNetwork(FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, fish_profiles_on_startup, 1, available_fish, 2);
+    fish_profile fish_profiles_on_startup[] = {};
+    fish_profile available_fish[] = {fish1, fish2, fish3, fish4, fish5, fish6, fish7, fish8, fish9, fish10, fish11};
+    FishNetwork world1_fish_network = FishNetwork(FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, fish_profiles_on_startup, 0, available_fish, 11, X_COORD_OFFSET);
+    world1_fish_network.update_boundaries(-X_COORD_OFFSET, world1.width + X_COORD_OFFSET, 0, world1.height, true);
 
     // ----- Final Set-ups World1 -----
 
     // Create and set-up the camera.
     Camera2D world1_camera = { 0 };
     
-    if (false)
+    if (debug_camera)
     {
+        world1_camera.target = (Vector2) { world1_my_fish.get_location().x, world1_my_fish.get_location().y };
+        world1_camera.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
         world1_camera.rotation = 0;
-        world1_camera.zoom = 0.3;
+        world1_camera.zoom = 0.2;
     }
     
     else
@@ -1665,6 +1959,7 @@ int main()
                 camera = world1_camera;
                 is_screen_initialized = true;
                 grid.refresh_entity(&my_fish);
+                fish_network.setup();
             }
             
             // ----- Handle world 1 -----
@@ -1680,9 +1975,15 @@ int main()
             my_fish.update_boundaries(ceil(my_fish_current_width / 2), world.width - ceil(my_fish_current_width / 2), ceil(my_fish_current_height / 2), world.height - ceil(my_fish_current_height / 2), false);
         
             // Update the fish network.
-            fish_network.update_boundaries(0, world.width, 0, world.height, true);
+            fish_network.update_boundaries(-X_COORD_OFFSET, world.width + X_COORD_OFFSET, 0, world.height, true);
+            
+            // - Turbo.
+            my_fish.update_turbo();
             
             // - User Input Management -
+
+            // Handle the space bar.
+            if (IsKeyPressed(32)) { my_fish.apply_turbo(); }
             
             // Handle arrow keys strokes. They move the fish in the world.
             if (IsKeyDown(KEY_RIGHT)) { my_fish.move_right(); grid.refresh_entity(&my_fish); }
@@ -1696,7 +1997,7 @@ int main()
             fish_network.handle_eaten();
             
             // Release available fish.
-            fish_network.load_available_fish();
+            fish_network.load_available_fish(false);
             
             // Move all the fish in the fish network.
             fish_network.move();
@@ -1757,7 +2058,7 @@ int main()
             if (my_fish.get_location().y - ceil(camera_current_height / 2) >= 0 && my_fish.get_location().y + ceil(camera_current_height / 2) < world.height) { camera_pos_y = my_fish.get_location().y; }
 
             // Update the camera position.
-            camera.target = (Vector2){ camera_pos_x, camera_pos_y };
+            if (!debug_camera) { camera.target = (Vector2){ camera_pos_x, camera_pos_y }; }
 
             // --- Prepare Gifs for drawing ---
             
@@ -1852,6 +2153,9 @@ int main()
 
                 // Draw the current scale widget.
                 my_fish.draw_scale_widget();
+                
+                // Draw the current turbo widget.
+                my_fish.draw_turbo_widget();
             }
             
         EndDrawing();
