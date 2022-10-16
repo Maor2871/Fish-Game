@@ -329,7 +329,13 @@ class Cell
             entities = NULL;
             entities_counter=0;
         }
-       
+        
+        // Clears the current cell.
+        void reset()
+        {
+            entities_counter = 0;
+        }
+        
         // Add new entity to the cell.
         void add_entity(GridEntity* new_entity)
         {
@@ -448,6 +454,15 @@ class Grid
             height_pixels = 0;
             cell_width_pixels = 0;
             cell_height_pixels = 0;
+        }
+        
+        // Reset the grid.
+        void reset() 
+        {
+            // Iterate over the cells in the grid.
+            for (int row_index = 0; row_index < rows_amount; row_index++)
+                for (int col_index = 0; col_index < columns_amount; col_index++)
+                    cells[row_index][col_index] -> reset();
         }
         
         // The function receives an entity and refresh it location on the grid.
@@ -957,12 +972,17 @@ class MyFish : public Fish
         
         // The stroke of the scale widget.
         int turbo_widget_stroke;
-    
+        
+        // Data relevant for resetting.
+        Location startup_location;
+        float original_scale;
+        
     public:
     
         // Constructor.
         MyFish(Image new_my_fish_image, int* new_frames_amount, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_required_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within, Location new_scale_widget_location, Size new_scale_sidget_size, int new_scale_widget_stroke, float new_turbo, int new_turbo_duration_frames, int new_turbo_reload_frames, Location new_turbo_widget_location, Size new_turbo_widget_size, int new_turbo_widget_stroke) : Fish(new_my_fish_image, new_frames_amount, "my fish", new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_required_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
+            // Initialize my fish properties.
             required_scale = new_required_scale;
             scale_widget_location.set_location(new_scale_widget_location);
             scale_widget_size = new_scale_sidget_size;
@@ -975,12 +995,25 @@ class MyFish : public Fish
             turbo_widget_location = new_turbo_widget_location;
             turbo_widget_size = new_turbo_widget_size;
             turbo_widget_stroke = new_turbo_widget_stroke;
+            
+            // Properties relevant for resetting.
+            startup_location = new_location;
+            original_scale = new_scale;
         }
         
         // Default Constructor.
         MyFish() : Fish()
         {
             
+        }
+        
+        // Resets the fish to its initial properties.
+        void reset()
+        {
+            turbo_duration_frames_left = 0;
+            turbo_reload_frames_left = 0;
+            location.set_location(startup_location);
+            scale = original_scale;
         }
         
         // Returns true if my fish has reached its required scale.
@@ -1373,6 +1406,13 @@ class FishNetwork
             lot_range = 0;
         }
         
+        // Reset the current fish network.
+        void reset()
+        {
+            current_population = 0;
+            current_fish_amount = 0;
+        }
+        
         // The function creates and loads all the fish on startup.
         void setup()
         {           
@@ -1574,6 +1614,9 @@ int main()
     const char* PATH_MAIN_MENU = "Textures/Menus/Main Menu/Main Menu.png";
     const char* PATH_CAMPAIN_BUTTON = "Textures/Menus/Main Menu/Campain button.png";
     const char* PATH_MAP = "Textures/Menus/Map/Map.png";
+    const char* PATH_VICTORY = "Textures/Menus/Windows/Victory.png";
+    const char* PATH_DEFEAT = "Textures/Menus/Windows/Defeat.png";
+    const char* PATH_MAP_BUTTON = "Textures/Menus/Windows/Map Button.png";
     const char* PATH_WORLD1_BUTTON = "Textures/Menus/Map/World 1 Button.png";
     const char* PATH_MY_FISH = "Textures/Fish/My Fish/My Fish.gif";
     const char* PATH_WORLD1 = "Textures/Worlds/World 1/World 1.png";
@@ -1676,7 +1719,7 @@ int main()
     // Load the campain button.
     Texture2D campain_button = LoadTexture(PATH_CAMPAIN_BUTTON); 
     
-    // Define frame rectangle for drawing
+    // Define frame rectangle for drawing.
     Rectangle campain_button_frame = { (int) floor (SCREEN_WIDTH / 2 - campain_button.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2) + 300, campain_button.width, campain_button.height };
     
     // The current mouse point location.
@@ -1692,6 +1735,23 @@ int main()
     
     // Define frame rectangle for drawing
     Rectangle world1_button_frame = { 100, 100, world1_button.width, world1_button.height };
+    
+    // # ----- Windows ----- #
+    
+    // The victory window.
+    Texture2D victory = LoadTexture(PATH_VICTORY);
+    
+    // The defeat window.
+    Texture2D defeat = LoadTexture(PATH_DEFEAT);
+    
+    // The back to map button.
+    Texture2D back_to_map_button = LoadTexture(PATH_MAP_BUTTON);
+    
+    // The frame of the back to map button.
+    Rectangle back_to_map_button_frame = {(int) floor(SCREEN_WIDTH / 2 - back_to_map_button.width / 2), (int) floor(SCREEN_HEIGHT / 2) + 150, back_to_map_button.width, back_to_map_button.height};
+    
+    // True if victory/defeat.
+    bool is_victory = false, is_defeat = false;
     
     // # ----- World 1 ----- #
     
@@ -1899,22 +1959,12 @@ int main()
 
     // Create and set-up the camera.
     Camera2D world1_camera = { 0 };
+    world1_camera.target = (Vector2) { world1_my_fish.get_location().x, world1_my_fish.get_location().y };
+    world1_camera.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+    world1_camera.rotation = 0;
     
-    if (debug_camera)
-    {
-        world1_camera.target = (Vector2) { world1_my_fish.get_location().x, world1_my_fish.get_location().y };
-        world1_camera.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
-        world1_camera.rotation = 0;
-        world1_camera.zoom = 0.2;
-    }
-    
-    else
-    {
-        world1_camera.target = (Vector2) { world1_my_fish.get_location().x, world1_my_fish.get_location().y };
-        world1_camera.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
-        world1_camera.rotation = 0;
-        world1_camera.zoom = 0.7;
-    }
+    if (debug_camera) { world1_camera.zoom = 0.2; }
+    else { world1_camera.zoom = 0.7; }
     
 	// ----- Game Loop -----
 	
@@ -1944,6 +1994,44 @@ int main()
             {
                 current_screen = "World 1";
                 continue;
+            }
+        }
+        
+        else if (is_victory || is_defeat)
+        {
+            // Keep playing the gifs in the background.
+            my_fish.set_next_frame();
+            fish_network.set_next_frame();
+            
+            // Get the current position of the mouse.
+            mouse_point = GetMousePosition();
+
+            // The back to map button was pressed.
+            if (CheckCollisionPointRec(mouse_point, back_to_map_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                // Reset the world.
+                if (current_screen == "World 1")
+                {
+                    // Reset my fish.
+                    world1_my_fish.reset();
+                    
+                    // Reset the fish network.
+                    world1_fish_network.reset();
+
+                    // Reset the grid.
+                    world1_grid.reset();
+                    
+                    // Reset the camera.
+                    world1_camera.target = (Vector2) { world1_my_fish.get_location().x, world1_my_fish.get_location().y };
+                    
+                    // Need to initialize world 1 again.
+                    is_screen_initialized = false;
+                }
+                
+                // Change to the map, and reset the victory and defeat flags.
+                current_screen = "Map";
+                is_victory = false;
+                is_defeat = false;
             }
         }
         
@@ -2069,15 +2157,13 @@ int main()
             // Check if the game is over.
             if (!my_fish.is_alive())
             {
-                cout << "game over.\n";
-                break;
+                is_defeat = true;
             }
             
             // Check if the fish has reached the required size.
             if (my_fish.is_victory())
             {
-                cout << "victory!\n";
-                break;
+                is_victory = true;
             }
         }
 
@@ -2156,6 +2242,18 @@ int main()
                 
                 // Draw the current turbo widget.
                 my_fish.draw_turbo_widget();
+            }
+            
+            // Draw on top of the world the is victory or is defeat windows.
+            if (is_victory)
+            {
+                DrawTexture(victory, (int) floor(SCREEN_WIDTH / 2 - victory.width / 2), (int) floor(SCREEN_HEIGHT / 2 - victory.height / 2), WHITE);
+                DrawTexture(back_to_map_button, back_to_map_button_frame.x, back_to_map_button_frame.y, WHITE);
+            }
+            if (is_defeat)
+            {
+                DrawTexture(defeat, (int) floor(SCREEN_WIDTH / 2 - defeat.width / 2), (int) floor(SCREEN_HEIGHT / 2 - defeat.height / 2), WHITE);
+                DrawTexture(back_to_map_button, back_to_map_button_frame.x, back_to_map_button_frame.y, WHITE);
             }
             
         EndDrawing();
