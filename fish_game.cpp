@@ -1,6 +1,7 @@
 #include <raylib.h>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <random>
 #include <cmath>
 #include <thread>
@@ -1607,7 +1608,215 @@ class FishNetwork
         }
 };
 
+// ----- Technical Classes -----
 
+class Save
+{
+    /*
+        Reads the file with the game progress data. Attributes are public.
+    */
+    public:
+        
+        // The path to the saving file.
+        string file_path;
+        
+        // The file handler.
+        fstream save_file;
+        
+        // To what world the user has reached.
+        int world_checkpoint;
+        
+        // The current content of the file.
+        string current_file_content;
+    
+    public:
+    
+        Save(string new_file_path)
+        {
+            // Save the path of the save file.
+            file_path = new_file_path;
+            
+            // Open the file.
+            save_file.open(file_path, ios::in | ios::out | ios::app | ios::binary);
+            
+            // Default values.
+            world_checkpoint = 1;
+            
+            // - Read the file -
+            
+            if (!save_file) { return; }
+            
+            // The current line read from the file.
+            string current_line;
+            
+            // Do not read more than 100 lines from the file.
+            int count = 100;
+            
+            // Iterate over the lines of the file.
+            while (getline(save_file, current_line) && count > 0)
+            {
+                // Decrypt the current line.
+                current_line = decrypt(current_line);
+
+                // Add the line to the file content.
+                current_file_content += current_line + "\n";
+
+                // Analyze the line to get required data.
+                
+                // Read world checkpoint.
+                if (current_line.rfind("world checkpoint: ", 0) == 0)
+                {
+                    int world_checkpoint_length = ((string) ("world checkpoint: ")).length();
+                    if (current_line.length() >= world_checkpoint_length + 2 && isdigit(current_line[world_checkpoint_length]) && isdigit(current_line[world_checkpoint_length + 1])) 
+                    {
+                        string number = current_line.substr(world_checkpoint_length, 2);
+                        world_checkpoint = stoi(number); 
+                    }
+                }
+                
+                // Count one more line.
+                count--;
+            }
+            
+            // Make the file ready to write.
+            save_file.clear();
+        }
+        
+        // The function updates the world checkpoint in the file and in the world_checkpoint variable.
+        void update_world_checkpoint(int new_checkpoint)
+        {
+            // Update the value of world checkpoint.
+            world_checkpoint = new_checkpoint;
+            
+            // Create the world checkpoint string.
+            string world_checkpoint_string = "";
+            if (world_checkpoint >= 10) { world_checkpoint_string = to_string(world_checkpoint); }
+            else { world_checkpoint_string = "0" + to_string(world_checkpoint); }
+            
+            // Variables for the following loop.
+            string current_line;
+            int current_index = 0;
+            int world_checkpoint_length = ((string) "world checkpoint: ").length();
+
+            // Iterate over the content of the file.
+            while (current_index < current_file_content.length())
+            {
+                // This is the end of the current line.
+                if (current_file_content[current_index] == '\\' && current_index + 1 < (current_file_content.length()) && current_file_content[current_index + 1] == 'n') { current_line = ""; continue; }
+                
+                // Add the next character of the line.
+                current_line += current_file_content[current_index];
+                
+                // Make the check.
+                if (current_line.substr(0, world_checkpoint_length) == "world checkpoint: " && current_line.length() == world_checkpoint_length + 2)
+                {
+                    current_file_content[current_index - 1] = world_checkpoint_string[0];
+                    current_file_content[current_index] = world_checkpoint_string[1];
+                    break;
+                }
+                
+                // Move to the next index.
+                current_index++;
+            }
+            
+            // Update the new content of the file.
+            update_file_content();
+        }
+        
+        // The function rewrites the file with the current file content value.
+        void update_file_content()
+        {
+            // Close the file to write its new content.
+            save_file.close();
+            
+            // Open the file and clear its current content.
+            fstream save_file(file_path, ios::out | ios::trunc | ios::binary);
+            
+            // Write the updated content.
+            save_file << encrypt(current_file_content);
+            
+            // Close the file.
+            save_file.close();
+            
+            // And open it for reading again.
+            save_file.open(file_path, ios::in | ios::out | ios::app | ios::binary);
+        }
+        
+        // The function receives a string and encrypts it.
+        string encrypt(string to_encrypt)
+        {
+            // The final encrypted string.
+            string encrypted = "";
+            
+            // Iterate over the received string.
+            for (int i = 0; i < to_encrypt.length(); i++)
+            {
+                // Keep on the lines structure.
+                if (to_encrypt[i] == '\\' && i + 1 < (to_encrypt.length()) && to_encrypt[i + 1] == 'n') { to_encrypt[i] = '\\'; to_encrypt[i + 1] = 'n'; i += 1; continue; }
+
+                // Encrypt the current char.
+                encrypted += to_string(int(to_encrypt[i]) * (i + 4) + 7) + "_";
+            }
+            
+            // Return the new encrypted string.
+            return encrypted;
+        }
+        
+        // The function recieves an encrypted string, decrypts it and returns the decrypted string.
+        string decrypt(string to_decrypt)
+        {
+            // The decrypted string will be here at the end.
+            string decrypted = "";
+            
+            // the current decrypted character.
+            string current = "";
+            
+            // The index of the received string.
+            int index = 0;
+            
+            // The current char index.
+            int char_index = 0;
+
+            // Iterate over the received string.
+            while (index < to_decrypt.length())
+            {
+                // Is the current decrypted character fully loaded?
+                if (to_decrypt[index] == '_')
+                {
+                    // Decrypt the current char (get it's ascii value).
+                    decrypted += char((stoi(current) - 7) / (char_index + 4));
+                    
+                    // Reset the current decrypted char.
+                    current = "";
+                    
+                    // Count another decrypted character.
+                    char_index++;
+                }
+                
+                // Keep loading the current decrypted character.
+                else 
+                {
+                    // This is not a number, the received string was not encrypted according to the protocol. Return an empty string.
+                    if (!isdigit(to_decrypt[index])) { return ""; }
+                    
+                    // Update the current decrypted character.
+                    current += to_decrypt[index]; 
+                }
+                
+                // Move to the next character in the received string.
+                index++;
+            }
+            
+            // Return the decrypted string.
+            return decrypted;
+        }
+        
+        // Close the game progress file.
+        void quit()
+        {
+            save_file.close();
+        }
+};
 
 // ----- Main Code -----
 
@@ -1635,6 +1844,7 @@ int main()
     const char* PATH_WORLD2_BUTTON = "Textures/Menus/Map/World 2 Button.png";
     const char* PATH_MY_FISH = "Textures/Fish/My Fish/My Fish.gif";
     const char* PATH_WORLD1 = "Textures/Worlds/World 1/World 1.png";
+    const char* PATH_WORLD2 = "Textures/Worlds/World 2/World 2.png";
     const char* PATH_FISH1 = "Textures/Fish/Fish 1/fish 1.gif";
     const char* PATH_FISH2 = "Textures/Fish/Fish 2/fish 2.gif";
     const char* PATH_FISH3 = "Textures/Fish/Fish 3/fish 3.gif";
@@ -1648,6 +1858,9 @@ int main()
     const char* PATH_FISH11 = "Textures/Fish/Fish 11/fish 11.gif";
     const char* PATH_CRAB1 = "Textures/Crabs/Crab 1/Crab 1.gif";
     
+    // - Other Paths
+    string path_game_progress_file = "./save.txt";
+    
     // - Game Properties
     const int FISH_POPULATION = 50;
     const int GRID_ROWS = 3;
@@ -1656,6 +1869,9 @@ int main()
     const int X_COORD_OFFSET = 1000;
     bool debug = false;
     bool debug_camera = false;
+    
+    // Load game progress data.
+    Save game_save = Save(path_game_progress_file);
 
 	// ### --- GUI Initialization --- ###
 	
@@ -1992,7 +2208,7 @@ int main()
     // # ----- World 2 ----- #
     
     // Load Textures.
-    Texture2D world2 = LoadTexture(PATH_WORLD1);
+    Texture2D world2 = LoadTexture(PATH_WORLD2);
     
     // Create the grid.
     Grid world2_grid = Grid(GRID_COLS, GRID_ROWS, FISH_POPULATION, world2.width, world2.height);
@@ -2257,7 +2473,7 @@ int main()
             }
             
             // The campain button was pressed.
-            if (CheckCollisionPointRec(mouse_point, world2_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            if (game_save.world_checkpoint >= 2 && CheckCollisionPointRec(mouse_point, world2_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 current_screen = "World";
                 current_world = 2;
@@ -2438,7 +2654,11 @@ int main()
             // Check if the fish has reached the required size.
             if (my_fish.is_victory())
             {
+                // Update game status.
                 is_victory = true;
+                
+                // Check if unlocked new world.
+                if (game_save.world_checkpoint == current_world) { game_save.update_world_checkpoint(current_world + 1); }
             }
         }
 
@@ -2468,7 +2688,7 @@ int main()
                 
                 // Draw the worlds buttons.
                 DrawTexture(world1_button, world1_button_frame.x, world1_button_frame.y, WHITE);
-                DrawTexture(world2_button, world2_button_frame.x, world2_button_frame.y, WHITE);
+                if (game_save.world_checkpoint >= 2) { DrawTexture(world2_button, world2_button_frame.x, world2_button_frame.y, WHITE); }
             }
             
             else if (current_screen == "World")
@@ -2546,4 +2766,7 @@ int main()
     
 	// Close the game screen.
 	CloseWindow();
+    
+    // Close the game progress file.
+    game_save.quit();
 }
