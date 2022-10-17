@@ -1858,6 +1858,11 @@ int main()
     const char* PATH_FISH11 = "Textures/Fish/Fish 11/fish 11.gif";
     const char* PATH_CRAB1 = "Textures/Crabs/Crab 1/Crab 1.gif";
     
+    // - Audio Paths
+    const char* PATH_MUSIC_MAIN_THEME = "Music/Main Theme.mp3";
+    const char* PATH_MUSIC_WORLD1 = "Music/World 1.mp3";
+    const char* PATH_MUSIC_WORLD2 = "Music/World 2.mp3";
+    
     // - Other Paths
     string path_game_progress_file = "./save.txt";
     
@@ -1877,6 +1882,9 @@ int main()
 	
 	// Screen set-up.
 	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE);
+    
+    // Audio set-up.
+    InitAudioDevice();
 	
 	// Fps declaration.
 	SetTargetFPS(FPS);
@@ -1934,6 +1942,16 @@ int main()
     
     int crab1_image_frames_amount;
     Image crab1_image = LoadImageAnim(PATH_CRAB1, &crab1_image_frames_amount);
+    
+    // # ----- Load Audio ----- #
+    
+    Sound music_main_theme = LoadSound(PATH_MUSIC_MAIN_THEME);
+    
+    Sound music_world1 = LoadSound(PATH_MUSIC_WORLD1);
+    
+    Sound music_world2 = LoadSound(PATH_MUSIC_WORLD2);
+    
+    Sound current_music;
     
     // # ----- Variables -----
 
@@ -2434,12 +2452,22 @@ int main()
     if (debug_camera) { world2_camera.zoom = 0.15; }
     else { world2_camera.zoom = 0.7; }
     
+    // Play the main theme music.
+    current_music = music_world1;
+    PlaySound(current_music);
+    
 	// ----- Game Loop -----
 	
 	// As long as the Esc button or exit button were not pressed, continue to the next frame.
 	while (!WindowShouldClose())
 	{
+        // --- Update Music ---
+        
+        // Play the current background music in loop.
+        if (!IsSoundPlaying(current_music)) { PlaySound(current_music); }
+        
         // --- Update Data ---
+        
         if (current_screen == "Main Menu")
         {
             // Get the current position of the mouse.
@@ -2457,9 +2485,10 @@ int main()
             // Get the current position of the mouse.
             mouse_point = GetMousePosition();
 
-            // The campain button was pressed.
+            // World 1 was pressed.
             if (CheckCollisionPointRec(mouse_point, world1_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
+                // Set the current world to world 1.
                 current_screen = "World";
                 current_world = 1;
                 world = world1;
@@ -2469,12 +2498,19 @@ int main()
                 camera = world1_camera;
                 grid.refresh_entity(&my_fish);
                 fish_network.setup();
+                
+                // Play the music of world 1.
+                StopSound(current_music);
+                current_music = music_world1;
+                PlaySound(current_music);
+                
                 continue;
             }
             
-            // The campain button was pressed.
+            // World 2 was pressed.
             if (game_save.world_checkpoint >= 2 && CheckCollisionPointRec(mouse_point, world2_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
+                // Set the current world to world 2.
                 current_screen = "World";
                 current_world = 2;
                 world = world2;
@@ -2484,6 +2520,12 @@ int main()
                 camera = world2_camera;
                 grid.refresh_entity(&my_fish);
                 fish_network.setup();
+                
+                // Play the music of world 2.
+                StopSound(current_music);
+                current_music = music_world2;
+                PlaySound(current_music);
+                
                 continue;
             }
         }
@@ -2514,6 +2556,9 @@ int main()
                     
                     // Reset the camera.
                     world1_camera.target = (Vector2) { world1_my_fish.get_location().x, world1_my_fish.get_location().y };
+                    
+                    // Stop the music.
+                    StopSound(current_music);
                 }
                 
                 // Reset the world.
@@ -2530,12 +2575,19 @@ int main()
                     
                     // Reset the camera.
                     world2_camera.target = (Vector2) { world2_my_fish.get_location().x, world2_my_fish.get_location().y };
+                    
+                    // Stop the music.
+                    StopSound(current_music);
                 }
                 
                 // Change to the map, and reset the victory and defeat flags.
                 current_screen = "Map";
                 is_victory = false;
                 is_defeat = false;
+                
+                // Change the music back to the theme.
+                current_music = music_main_theme;
+                PlaySound(music_main_theme);
             }
         }
         
@@ -2562,7 +2614,7 @@ int main()
             // - User Input Management -
 
             // Handle the space bar.
-            if (IsKeyPressed(32)) { my_fish.apply_turbo(); }
+            if (IsKeyPressed(KEY_SPACE)) { my_fish.apply_turbo(); }
             
             // Handle arrow keys strokes. They move the fish in the world.
             if (IsKeyDown(KEY_RIGHT)) { my_fish.move_right(); grid.refresh_entity(&my_fish); }
@@ -2763,6 +2815,14 @@ int main()
     // Remove the image.
     UnloadImage(my_fish_image);
     UnloadImage(fish1_image);
+    
+    // Close all the musics.
+    //UnloadMusicStream(music_main_theme);
+    UnloadSound(music_main_theme);
+    UnloadSound(music_world1);
+    UnloadSound(music_world2);
+    
+    CloseAudioDevice();
     
 	// Close the game screen.
 	CloseWindow();
