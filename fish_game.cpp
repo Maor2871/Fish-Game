@@ -1239,13 +1239,16 @@ class WanderFish : public Fish
         int max_speed_x;
         int min_speed_y;
         int max_speed_y;
+        
+        // The fish initial location cannot be within this frame.
+        Rectangle exclude_setup_location_frame;
    
     public:
         
         // Constructor.
         // new_paths_count_in_paths_stack should state the number of stacks which are saved in the received paths_stack.
         // The location is relevant if there is no paths_stack or is_initial_location is false;
-        WanderFish(int new_fps, Image new_wander_fish_image, int* new_frames_amount, string new_fish_type, bool new_is_sting_proof, Location new_location, bool is_initial_left_location, bool is_randomize_x_coord, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, bool is_randomize_initial_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_x_offset, int new_max_cells_within, Cell** new_cells_within, Sound new_sound_eat, Sound new_sound_sting) : Fish(new_fps, new_wander_fish_image, new_frames_amount, new_fish_type, new_is_sting_proof, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within, new_sound_eat, new_sound_sting)
+        WanderFish(int new_fps, Image new_wander_fish_image, int* new_frames_amount, string new_fish_type, bool new_is_sting_proof, Location new_location, bool is_initial_left_location, bool is_randomize_x_coord, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, bool is_randomize_initial_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_x_offset, int new_max_cells_within, Cell** new_cells_within, Sound new_sound_eat, Sound new_sound_sting, Rectangle new_exclude_setup_location_frame) : Fish(new_fps, new_wander_fish_image, new_frames_amount, new_fish_type, new_is_sting_proof, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within, new_sound_eat, new_sound_sting)
         {
             // Set the range of speeds on both axes.
             min_speed_x = new_min_speed_x;
@@ -1256,6 +1259,9 @@ class WanderFish : public Fish
             // Set the range of a new path frames.
             min_path_frames = new_min_path_frames;
             max_path_frames = new_max_path_frames;
+            
+            // Initial location cannot be within this frame.
+            exclude_setup_location_frame = new_exclude_setup_location_frame;
             
             // If true, randomizing the initial scale.
             if (is_randomize_initial_scale) { scale = max(1, rand() % (int) floor(max_scale * 1000 - 1000) / 1000 + 1);  }
@@ -1271,10 +1277,10 @@ class WanderFish : public Fish
                 if (my_paths_stack.is_initial_location) { location.set_location(my_paths_stack.initial_location); }
                 
                 // If initial y coordinate is set.
-                else if (my_paths_stack.is_initial_y_coordinate) { set_random_initial_location(is_initial_left_location, my_paths_stack.is_randomize_x_coordinate || is_randomize_x_coord, new_x_offset, true, my_paths_stack.initial_y_coordinate); }
+                else if (my_paths_stack.is_initial_y_coordinate) { set_random_initial_location(is_initial_left_location, my_paths_stack.is_randomize_x_coordinate || is_randomize_x_coord, new_x_offset, true, my_paths_stack.initial_y_coordinate, exclude_setup_location_frame); }
                 
                 // Otherwise, totally randomize the initial location.
-                else { set_random_initial_location(is_initial_left_location, is_randomize_x_coord, new_x_offset, false, 0); }
+                else { set_random_initial_location(is_initial_left_location, is_randomize_x_coord, new_x_offset, false, 0, exclude_setup_location_frame); }
                 
                 // Set the first path as the current path.
                 current_path = my_paths_stack.paths[0];
@@ -1288,7 +1294,7 @@ class WanderFish : public Fish
             {
                 current_path = generate_new_path();
                 
-                set_random_initial_location(is_initial_left_location, is_randomize_x_coord, new_x_offset, false, 0);
+                set_random_initial_location(is_initial_left_location, is_randomize_x_coord, new_x_offset, false, 0, exclude_setup_location_frame);
             }
             
             // Update the properties of the wander fish to match the properties of the current path.
@@ -1309,44 +1315,54 @@ class WanderFish : public Fish
         }
         
         // The function sets a random initial_location.
-        void set_random_initial_location(bool is_initial_left_location, bool is_randomize_x_coord, int x_coord_offset, bool is_initial_y_coordinate, int initial_y_coordinate)
+        void set_random_initial_location(bool is_initial_left_location, bool is_randomize_x_coord, int x_coord_offset, bool is_initial_y_coordinate, int initial_y_coordinate, Rectangle exclude_frame)
         {
+            // The final coordinates.
             int y_coordinates = 0;
-
-            // Set the received y coordinate.
-            if (is_initial_y_coordinate) { y_coordinates = initial_y_coordinate; }
-            
-            // Randomize the location of the y axis.
-            else
-            {
-                if (bottom_boundary - top_boundary <= 0) { y_coordinates = top_boundary + size.height; }
-                else { y_coordinates = rand() % (bottom_boundary - top_boundary) + top_boundary; }
-            }
-
-            // The x coordination.
             int x_coordinates = 0;
+            Vector2 position = {0, 0};
             
-            // If random x coord is required.
-            if (is_randomize_x_coord)
-            {               
-                // Randomize the x coordination.
-                if (right_boundary - left_boundary <= 0) { x_coordinates = left_boundary; }
-                else { x_coordinates = rand() % (right_boundary - left_boundary) + left_boundary; }
-            }
-            
-            // Left or right x coordinate is required.
-            else
+            // Make sure not in the exclude frame.
+            do
             {
-                // Randomize the x_coord_offset.
-                x_coord_offset = rand() % (x_coord_offset);
+                // Set the received y coordinate.
+                if (is_initial_y_coordinate) { y_coordinates = initial_y_coordinate; }
                 
-                // The location should be at the left side of the world.
-                if (is_initial_left_location) { x_coordinates = left_boundary + x_coord_offset; }
+                // Randomize the location of the y axis.
+                else
+                {
+                    if (bottom_boundary - top_boundary <= 0) { y_coordinates = top_boundary + size.height; }
+                    else { y_coordinates = rand() % (bottom_boundary - top_boundary) + top_boundary; }
+                }
+
                 
-                // The location should be at the right side of the world.
-                else { x_coordinates = right_boundary - x_coord_offset; }
+                
+                // If random x coord is required.
+                if (is_randomize_x_coord)
+                {               
+                    // Randomize the x coordination.
+                    if (right_boundary - left_boundary <= 0) { x_coordinates = left_boundary; }
+                    else { x_coordinates = rand() % (right_boundary - left_boundary) + left_boundary; }
+                }
+                
+                // Left or right x coordinate is required.
+                else
+                {
+                    // Randomize the x_coord_offset.
+                    x_coord_offset = rand() % (x_coord_offset);
+                    
+                    // The location should be at the left side of the world.
+                    if (is_initial_left_location) { x_coordinates = left_boundary + x_coord_offset; }
+                    
+                    // The location should be at the right side of the world.
+                    else { x_coordinates = right_boundary - x_coord_offset; }
+                }
+                
+                position.x = x_coordinates;
+                position.y = y_coordinates;
             }
-            
+            while (CheckCollisionPointRec(position, exclude_frame));
+
             // Set the initial location.
             location.set_location(Location(x_coordinates, y_coordinates));
         }
@@ -1496,10 +1512,13 @@ class FishNetwork
         // The x coordinate offset of new fish initialization.
         int x_coord_offset;
         
+        // Frame in which fish cannot be initialized on set-up.
+        Rectangle exclude_setup_location_frame;
+        
     public:
 
         // Constructor.
-        FishNetwork(int new_fps, int new_max_population, float new_eat_grow_ratio, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length, int new_x_coord_offset)
+        FishNetwork(int new_fps, int new_max_population, float new_eat_grow_ratio, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length, int new_x_coord_offset, Rectangle new_exclude_setup_location_frame)
         {
             // How many frames there are per second.
             fps = new_fps;
@@ -1545,6 +1564,9 @@ class FishNetwork
                 proportions_lot[i] = available_fish[i].proportion * 1000;
                 lot_range += proportions_lot[i];
             }
+        
+            // Set the frame in which fish cannot be initialized on setup.
+            exclude_setup_location_frame = new_exclude_setup_location_frame;
         }
         
         // Default Constructor.
@@ -1723,7 +1745,7 @@ class FishNetwork
             Cell** cells_within = new Cell*[grid -> get_rows_amount() * grid -> get_columns_amount()];
             
             // Create the fish.
-            WanderFish* fish_to_load = new WanderFish(fps, current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.is_sting_proof, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, is_on_setup, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], - x_coord_offset, grid -> get_width_pixels() + x_coord_offset, 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, current_fish_profile.is_randomize_initial_scale, eat_grow_ratio, current_fish_profile.can_eat_ratio, current_fish_profile.cant_eat_ratio, 0, current_fish_profile.is_facing_left_on_startup, x_coord_offset, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within, current_fish_profile.sound_eat, current_fish_profile.sound_sting);
+            WanderFish* fish_to_load = new WanderFish(fps, current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.is_sting_proof, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, is_on_setup, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], - x_coord_offset, grid -> get_width_pixels() + x_coord_offset, 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, current_fish_profile.is_randomize_initial_scale, eat_grow_ratio, current_fish_profile.can_eat_ratio, current_fish_profile.cant_eat_ratio, 0, current_fish_profile.is_facing_left_on_startup, x_coord_offset, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within, current_fish_profile.sound_eat, current_fish_profile.sound_sting, exclude_setup_location_frame);
 
             // Save the fish in the fish array.
             fish[current_fish_amount] = fish_to_load;
@@ -1980,6 +2002,10 @@ int main()
     const char* PATH_WORLD1_BUTTON = "Textures/Menus/Map/World 1 Button.png";
     const char* PATH_WORLD2_BUTTON = "Textures/Menus/Map/World 2 Button.png";
     const char* PATH_WORLD3_BUTTON = "Textures/Menus/Map/World 3 Button.png";
+    const char* PATH_EXIT_WELCOME_WINDOW_BUTTON = "Textures/Worlds/Exit World Window.png";
+    const char* PATH_WORLD1_WELCOME_WINDOW = "Textures/Worlds/World 1/World 1 Welcome.png";
+    const char* PATH_WORLD2_WELCOME_WINDOW = "Textures/Worlds/World 2/World 2 Welcome.png";
+    const char* PATH_WORLD3_WELCOME_WINDOW = "Textures/Worlds/World 3/World 3 Welcome.png";
     const char* PATH_MY_FISH = "Textures/Fish/My Fish/My Fish.gif";
     const char* PATH_WORLD1 = "Textures/Worlds/World 1/World 1.png";
     const char* PATH_WORLD2 = "Textures/Worlds/World 2/World 2.png";
@@ -2130,7 +2156,9 @@ int main()
     int current_cell_entities_amount;
     Cell*** grid_cells;
 	int my_fish_current_width, my_fish_current_height;
-    int camera_current_height = 0, camera_current_width = 0; 
+    int camera_current_height = 0, camera_current_width = 0;
+    bool is_world_welcome_window = false;
+    Texture2D current_world_welcome_window;
     
     // # ----- Main Menu ----- #
     
@@ -2141,7 +2169,7 @@ int main()
     Texture2D campain_button = LoadTexture(PATH_CAMPAIN_BUTTON); 
     
     // Define frame rectangle for drawing.
-    Rectangle campain_button_frame = { (int) floor (SCREEN_WIDTH / 2 - campain_button.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2) + 300, campain_button.width, campain_button.height };
+    Rectangle campain_button_frame = { (int) floor (SCREEN_WIDTH / 2 - campain_button.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2) + 400, campain_button.width, campain_button.height };
     
     // The current mouse point location.
     Vector2 mouse_point = { 0, 0 };
@@ -2178,10 +2206,19 @@ int main()
     // True if victory/defeat.
     bool is_victory = false, is_defeat = false;
     
+    // Load the exit_welcome_window button.
+    Texture2D exit_welcome_window_button = LoadTexture(PATH_EXIT_WELCOME_WINDOW_BUTTON); 
+    
+    // Define frame rectangle for drawing.
+    Rectangle exit_welcome_window_button_frame = { (int) floor (SCREEN_WIDTH / 2 - exit_welcome_window_button.width / 2), (int) floor(SCREEN_HEIGHT / 2) + 300, exit_welcome_window_button.width, exit_welcome_window_button.height };
+    
     // # ----- World 1 ----- #
     
     // Load Textures.
     Texture2D world1 = LoadTexture(PATH_WORLD1);
+    
+    // Load the welcome window.
+    Texture2D world1_welcome_window = LoadTexture(PATH_WORLD1_WELCOME_WINDOW);
     
     // Create the grid.
     Grid world1_grid = Grid(GRID_COLS, GRID_ROWS, FISH_POPULATION, world1.width, world1.height);
@@ -2377,7 +2414,7 @@ int main()
     
     fish_profile world1_fish_profiles_on_startup[] = {};
     fish_profile world1_available_fish[] = {world1_fish1, world1_fish2, world1_fish3, world1_fish4, world1_fish5, world1_fish6, world1_fish7, world1_fish8, world1_fish9, world1_fish10, world1_fish11};
-    FishNetwork world1_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, world1_fish_profiles_on_startup, 0, world1_available_fish, 11, X_COORD_OFFSET);
+    FishNetwork world1_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, world1_fish_profiles_on_startup, 0, world1_available_fish, 11, X_COORD_OFFSET, world1_my_fish.get_updated_rectangular_frame());
     world1_fish_network.update_boundaries(-X_COORD_OFFSET, world1.width + X_COORD_OFFSET, 0, world1.height, true);
 
     // ----- Final Set-ups World1 -----
@@ -2395,6 +2432,9 @@ int main()
     
     // Load Textures.
     Texture2D world2 = LoadTexture(PATH_WORLD2);
+    
+    // Load the welcome window.
+    Texture2D world2_welcome_window = LoadTexture(PATH_WORLD2_WELCOME_WINDOW);
     
     // Create the grid.
     Grid world2_grid = Grid(GRID_COLS, GRID_ROWS, FISH_POPULATION, world2.width, world2.height);
@@ -2606,7 +2646,7 @@ int main()
     
     fish_profile world2_fish_profiles_on_startup[] = {};
     fish_profile world2_available_fish[] = {world2_fish1, world2_fish2, world2_fish3, world2_fish4, world2_fish5, world2_fish6, world2_fish7, world2_fish8, world2_fish9, world2_fish10, world2_fish11, world2_crab1};
-    FishNetwork world2_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world2_grid, world2_fish_profiles_on_startup, 0, world2_available_fish, 12, X_COORD_OFFSET);
+    FishNetwork world2_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world2_grid, world2_fish_profiles_on_startup, 0, world2_available_fish, 12, X_COORD_OFFSET, world2_my_fish.get_updated_rectangular_frame());
     world2_fish_network.update_boundaries(-X_COORD_OFFSET, world2.width + X_COORD_OFFSET, 0, world2.height, true);
 
     // ----- Final Set-ups World2 -----
@@ -2624,6 +2664,9 @@ int main()
     
     // Load Textures.
     Texture2D world3 = LoadTexture(PATH_WORLD3);
+    
+    // Load the welcome window.
+    Texture2D world3_welcome_window = LoadTexture(PATH_WORLD3_WELCOME_WINDOW);
     
     // Create the grid.
     Grid world3_grid = Grid(GRID_COLS, GRID_ROWS, FISH_POPULATION, world3.width, world3.height);
@@ -2779,7 +2822,7 @@ int main()
     
     fish_profile world3_fish_profiles_on_startup[] = {};
     fish_profile world3_available_fish[] = {world3_fish4, world3_fish6, world3_fish8, world3_fish10, world3_crab1, world3_crab2, world3_jeflly_fish1, world3_jeflly_fish2};
-    FishNetwork world3_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world3_grid, world3_fish_profiles_on_startup, 0, world3_available_fish, 8, X_COORD_OFFSET);
+    FishNetwork world3_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world3_grid, world3_fish_profiles_on_startup, 0, world3_available_fish, 8, X_COORD_OFFSET, world3_my_fish.get_updated_rectangular_frame());
     world3_fish_network.update_boundaries(-X_COORD_OFFSET, world3.width + X_COORD_OFFSET, 0, world3.height, true);
 
     // ----- Final Set-ups World3 -----
@@ -2852,10 +2895,14 @@ int main()
             // World 1 was pressed.
             if (CheckCollisionPointRec(mouse_point, world1_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
-                // Set the current world to world 1.
+                // Clear the background of the map and main menu.
                 world1_fish_network.reset();
                 world1_grid.reset();
+                
+                // Set the current world to world 1.
                 current_screen = "World";
+                is_world_welcome_window = true;
+                current_world_welcome_window = world1_welcome_window;
                 current_world = 1;
                 world = world1;
                 my_fish = world1_my_fish;
@@ -2876,10 +2923,14 @@ int main()
             // World 2 was pressed.
             if (game_save.world_checkpoint >= 2 && CheckCollisionPointRec(mouse_point, world2_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
-                // Set the current world to world 2.
+                // Clear the background of the map and main menu.
                 world1_fish_network.reset();
                 world1_grid.reset();
+                
+                // Set the current world to world 2.
                 current_screen = "World";
+                is_world_welcome_window = true;
+                current_world_welcome_window = world2_welcome_window;
                 current_world = 2;
                 world = world2;
                 my_fish = world2_my_fish;
@@ -2900,10 +2951,14 @@ int main()
             // World 3 was pressed.
             if (game_save.world_checkpoint >= 3 && CheckCollisionPointRec(mouse_point, world3_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
-                // Set the current world to world 3.
+                // Clear the background of the map and main menu.
                 world1_fish_network.reset();
                 world1_grid.reset();
+
+                // Set the current world to world 3.
                 current_screen = "World";
+                is_world_welcome_window = true;
+                current_world_welcome_window = world3_welcome_window;
                 current_world = 3;
                 world = world3;
                 my_fish = world3_my_fish;
@@ -2996,13 +3051,38 @@ int main()
                 is_victory = false;
                 is_defeat = false;
                 
+                // Reset the map background.
+                current_world = 1;
+                world = world1;
+                fish_network = world1_fish_network;
+                grid = world1_grid;
+                camera = camera_main_menu_map;
+                fish_network.setup();
+                
                 // Change the music back to the theme.
                 current_music = music_main_theme;
                 PlaySound(music_main_theme);
             }
         }
         
-        else if( current_screen == "World")
+        else if (is_world_welcome_window)
+        {
+            // Check if the welcome window need to be closed.
+            // Get the current position of the mouse.
+            mouse_point = GetMousePosition();
+
+            // The exit welcome window button was pressed.
+            if (CheckCollisionPointRec(mouse_point, exit_welcome_window_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                is_world_welcome_window = false;
+            }
+            
+            // Keep the fish moving in the background.
+            fish_network.set_next_frame();
+            my_fish.set_next_frame();
+        }
+        
+        else if(current_screen == "World")
         {
             // ----- Handle world -----
 
@@ -3164,6 +3244,38 @@ int main()
                 DrawTexture(world1_button, world1_button_frame.x, world1_button_frame.y, WHITE);
                 if (game_save.world_checkpoint >= 2) { DrawTexture(world2_button, world2_button_frame.x, world2_button_frame.y, WHITE); }
                 if (game_save.world_checkpoint >= 3) { DrawTexture(world3_button, world3_button_frame.x, world3_button_frame.y, WHITE); }
+            }
+            
+            else if (is_world_welcome_window)
+            {
+                // Clear the background.
+                ClearBackground(RAYWHITE);
+                
+                // Everything inside this scope, is being manipulated by the camera.
+                // Every drawing outside this scope, will show up on the screen without being transformed by the camera.
+                BeginMode2D(camera);
+                    
+                    // Draw the background.
+                    DrawTexture(world, 0, 0, WHITE);
+
+                    // Draw the next gif frame of the fish.
+                    fish_network.draw_next_frame();
+                    my_fish.draw_next_frame();
+
+                // The end of the drawings affected by the camera.
+                EndMode2D();
+
+                // Draw the welcom window.
+                DrawTexture(current_world_welcome_window, (int) floor(SCREEN_WIDTH / 2 - current_world_welcome_window.width / 2), (int) floor(SCREEN_HEIGHT / 2 - current_world_welcome_window.height / 2), WHITE);
+                
+                // Draw the exit from welcom window button.
+                DrawTexture(exit_welcome_window_button, exit_welcome_window_button_frame.x, exit_welcome_window_button_frame.y, WHITE);
+                
+                // Draw the current scale widget.
+                my_fish.draw_scale_widget();
+                
+                // Draw the current turbo widget.
+                my_fish.draw_turbo_widget();
             }
             
             else if (current_screen == "World")
