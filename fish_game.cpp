@@ -164,6 +164,7 @@ struct paths_stack
     // Flags for the initial location.
     bool is_initial_location;
     bool is_initial_y_coordinate;
+    bool is_randomize_x_coordinate;
     bool is_left;
 };
 
@@ -175,6 +176,7 @@ struct fish_profile
     Image fish_image;
     int* fish_image_frames_amount;
     string fish_type;
+    bool is_sting_proof;
     bool is_facing_left_on_startup;
     Size size;
     float max_scaling;
@@ -609,6 +611,9 @@ class MyGif: public GridEntity
 
         // The gif as texture.
         Texture2D my_gif_texture;
+        
+        // The tint of the gif.
+        Color tint;
     
     public:
     
@@ -633,6 +638,9 @@ class MyGif: public GridEntity
 
             // Create the texture instance.
             my_gif_texture = LoadTextureFromImage(my_gif_image);
+            
+            // Set the tint to white.
+            tint = WHITE;
         }
         
         // Default Constructor.
@@ -648,6 +656,9 @@ class MyGif: public GridEntity
         void flip_vertical() {is_flip_vertical = true;}
         void unflip_horizontal() {is_facing_left_on_startup ? is_flip_horizontal = true : is_flip_horizontal = false;}
         void unflip_vertical() {is_flip_vertical = false;}
+        
+        // Change the tint of the gif.
+        void update_tint(Color new_tint) { tint = new_tint; }
         
         // The function Prepare the next frame of the gif.
         void set_next_frame()
@@ -688,7 +699,7 @@ class MyGif: public GridEntity
             Vector2 center = {(sqrt(scale) * size.width) / 2, (sqrt(scale) * size.height) / 2};
             
             // Draw the next frame of the gif properly.
-            DrawTexturePro(my_gif_texture, source, destination, center, rotation, WHITE);
+            DrawTexturePro(my_gif_texture, source, destination, center, rotation, tint);
         }
 
         // The function removes the gif from the screen.
@@ -718,6 +729,9 @@ class Fish : public MyGif
     
     protected:
         
+        // How many frames elapsed in a second.
+        int fps;
+
         // The type of the fish.
         string fish_type;
         
@@ -741,12 +755,28 @@ class Fish : public MyGif
         
         // Can't eat fish that are <cant_eat_ratio> and less my size.
         float cant_eat_ratio;
+        
+        // If true the fish can't get stinged.
+        bool is_sting_proof;
+        
+        // How many frames left for the current stunt to over.
+        int current_stunt_frames_left;
+        
+        // How much size decreases each frame from the current stunt.
+        float stunt_size_decrease_per_frame;
+
+        // The original speed of the fish (for when the speed is temporarly changed).
+        int original_speed_x;
+        int original_speed_y; 
        
     public:
         
         // Counstructor.
-        Fish(Image new_my_fish_image, int* new_frames_amount, string new_fish_type, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : MyGif(new_my_fish_image, new_frames_amount, "Fish", new_location, new_size, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        Fish(int new_fps, Image new_my_fish_image, int* new_frames_amount, string new_fish_type, bool new_is_sting_proof, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : MyGif(new_my_fish_image, new_frames_amount, "Fish", new_location, new_size, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
+            // How many frames are there per second.
+            fps = new_fps;
+            
             // Save the type of the fish.
             fish_type = new_fish_type;
             
@@ -774,6 +804,11 @@ class Fish : public MyGif
             
             // The ratio of fish size can't eat.
             cant_eat_ratio = new_cant_eat_ratio;
+            
+            // Stunt properties.
+            is_sting_proof = new_is_sting_proof;
+            current_stunt_frames_left = 0;
+            stunt_size_decrease_per_frame = 0;
         }
 
         // Default Constructor.
@@ -813,6 +848,58 @@ class Fish : public MyGif
         {
             if (location.y + speed_y > bottom_boundary) { location.y = bottom_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
             else { location.y += speed_y; }
+        }
+        
+        // The function causes the fish a jelly fish stunt.
+        void jelly_fish_stunt(float stunt_power)
+        {
+            // Sting proof.
+            if (is_sting_proof) { return; }
+            
+            // Currently in a stunt, can't be stunt again.
+            if (current_stunt_frames_left > 0) { return; }
+            
+            // Stunt.
+            current_stunt_frames_left = (int) floor(stunt_power * fps);
+            
+            // Calculate how much scale decreases each frame.
+            stunt_size_decrease_per_frame = (((scale - 1) / 2) * stunt_power) / current_stunt_frames_left;
+            
+            // Save the current speed and stunt.
+            original_speed_x = speed_x;
+            original_speed_y = speed_y;
+            speed_x = 0;
+            speed_y = 0;
+        }
+        
+        // Update the stunt for the current frame.
+        void update_stunt()
+        {
+            // If currently finished stun.
+            if (current_stunt_frames_left == 1)
+            {
+                // If the scale is not big enough, the fish is dead.
+                if (scale < 1.2) { eaten(); return; }
+                
+                // Restore the speed of the fish.
+                speed_x = original_speed_x;
+                speed_y = original_speed_y;
+                update_tint(WHITE);
+                current_stunt_frames_left--;
+            }
+            
+            // Move to the next frame.
+            if (current_stunt_frames_left > 0) 
+            {
+                current_stunt_frames_left--;
+                
+                // Update the tint for sting effect.
+                if (current_stunt_frames_left % 2 == 1) { tint = BLUE; }
+                else { tint = WHITE; }
+                
+                // Decrease the size.
+                scale -= stunt_size_decrease_per_frame;
+            }
         }
         
         // The function receives new boundaries, and sets them as the new boundaries of the fish.
@@ -910,6 +997,22 @@ class Fish : public MyGif
                     return;
                 }
                 
+                // - Handle My Fish and Jelly Fish Collision -
+                
+                if (((Fish*) collided_with_entity) -> get_fish_type().rfind("Jelly Fish", 0) == 0)
+                {
+                    jelly_fish_stunt(((Fish*) collided_with_entity) -> scale);
+                    return;
+                }
+                
+                else if (fish_type.rfind("Jelly Fish", 0) == 0)
+                {
+                    ((Fish*) collided_with_entity) -> jelly_fish_stunt(scale);
+                    return;
+                }
+                
+                // - Handle Classic Fish Collision -
+                
                 // The size in width of the current fish.
                 int my_size = (int) floor(size.width * size.height * scale);
             
@@ -941,7 +1044,7 @@ class MyFish : public Fish
     */
     
     protected:
-
+        
         // The speed multiplier when turbo is on.
         float turbo;
         
@@ -985,9 +1088,11 @@ class MyFish : public Fish
     public:
     
         // Constructor.
-        MyFish(Image new_my_fish_image, int* new_frames_amount, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_required_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within, Location new_scale_widget_location, Size new_scale_sidget_size, int new_scale_widget_stroke, float new_turbo, int new_turbo_duration_frames, int new_turbo_reload_frames, Location new_turbo_widget_location, Size new_turbo_widget_size, int new_turbo_widget_stroke) : Fish(new_my_fish_image, new_frames_amount, "my fish", new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_required_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        MyFish(int new_fps, Image new_my_fish_image, int* new_frames_amount, bool new_is_sting_proof, Location new_location, Size new_size, int new_speed_x, int new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_required_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within, Location new_scale_widget_location, Size new_scale_sidget_size, int new_scale_widget_stroke, float new_turbo, int new_turbo_duration_frames, int new_turbo_reload_frames, Location new_turbo_widget_location, Size new_turbo_widget_size, int new_turbo_widget_stroke) : Fish(new_fps, new_my_fish_image, new_frames_amount, "my fish", new_is_sting_proof, new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_required_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // Initialize my fish properties.
+            fps = new_fps;
+            current_stunt_frames_left = 0;
             required_scale = new_required_scale;
             scale_widget_location.set_location(new_scale_widget_location);
             scale_widget_size = new_scale_sidget_size;
@@ -1015,6 +1120,7 @@ class MyFish : public Fish
         // Resets the fish to its initial properties.
         void reset()
         {
+            current_stunt_frames_left = 0;
             turbo_duration_frames_left = 0;
             turbo_reload_frames_left = 0;
             location.set_location(startup_location);
@@ -1114,7 +1220,7 @@ class WanderFish : public Fish
         // Constructor.
         // new_paths_count_in_paths_stack should state the number of stacks which are saved in the received paths_stack.
         // The location is relevant if there is no paths_stack or is_initial_location is false;
-        WanderFish(Image new_wander_fish_image, int* new_frames_amount, string new_fish_type, Location new_location, bool is_initial_left_location, bool is_randomize_x_coord, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, bool is_randomize_initial_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_x_offset, int new_max_cells_within, Cell** new_cells_within) : Fish(new_wander_fish_image, new_frames_amount, new_fish_type, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        WanderFish(int new_fps, Image new_wander_fish_image, int* new_frames_amount, string new_fish_type, bool new_is_sting_proof, Location new_location, bool is_initial_left_location, bool is_randomize_x_coord, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, bool is_randomize_initial_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_x_offset, int new_max_cells_within, Cell** new_cells_within) : Fish(new_fps, new_wander_fish_image, new_frames_amount, new_fish_type, new_is_sting_proof, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // Set the range of speeds on both axes.
             min_speed_x = new_min_speed_x;
@@ -1140,7 +1246,7 @@ class WanderFish : public Fish
                 if (my_paths_stack.is_initial_location) { location.set_location(my_paths_stack.initial_location); }
                 
                 // If initial y coordinate is set.
-                else if (my_paths_stack.is_initial_y_coordinate) { set_random_initial_location(is_initial_left_location, is_randomize_x_coord, new_x_offset, true, my_paths_stack.initial_y_coordinate); }
+                else if (my_paths_stack.is_initial_y_coordinate) { set_random_initial_location(is_initial_left_location, my_paths_stack.is_randomize_x_coordinate || is_randomize_x_coord, new_x_offset, true, my_paths_stack.initial_y_coordinate); }
                 
                 // Otherwise, totally randomize the initial location.
                 else { set_random_initial_location(is_initial_left_location, is_randomize_x_coord, new_x_offset, false, 0); }
@@ -1329,7 +1435,10 @@ class FishNetwork
     */
     
     private:
-    
+        
+        // How many fps there are per second.
+        int fps;
+        
         // The maximum fish population in the world.
         int max_population;
         
@@ -1365,8 +1474,11 @@ class FishNetwork
     public:
 
         // Constructor.
-        FishNetwork(int new_max_population, float new_eat_grow_ratio, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length, int new_x_coord_offset)
+        FishNetwork(int new_fps, int new_max_population, float new_eat_grow_ratio, Grid* new_grid, fish_profile* new_fish_on_startup, int new_fish_on_startup_length, fish_profile* new_available_fish, int new_available_fish_length, int new_x_coord_offset)
         {
+            // How many frames there are per second.
+            fps = new_fps;
+            
             // The max population.
             max_population = new_max_population;
             
@@ -1586,7 +1698,7 @@ class FishNetwork
             Cell** cells_within = new Cell*[grid -> get_rows_amount() * grid -> get_columns_amount()];
             
             // Create the fish.
-            WanderFish* fish_to_load = new WanderFish(current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, is_on_setup, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], - x_coord_offset, grid -> get_width_pixels() + x_coord_offset, 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, current_fish_profile.is_randomize_initial_scale, eat_grow_ratio, current_fish_profile.can_eat_ratio, current_fish_profile.cant_eat_ratio, 0, current_fish_profile.is_facing_left_on_startup, x_coord_offset, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
+            WanderFish* fish_to_load = new WanderFish(fps, current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.is_sting_proof, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, is_on_setup, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], - x_coord_offset, grid -> get_width_pixels() + x_coord_offset, 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, current_fish_profile.is_randomize_initial_scale, eat_grow_ratio, current_fish_profile.can_eat_ratio, current_fish_profile.cant_eat_ratio, 0, current_fish_profile.is_facing_left_on_startup, x_coord_offset, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within);
 
             // Save the fish in the fish array.
             fish[current_fish_amount] = fish_to_load;
@@ -1842,9 +1954,11 @@ int main()
     const char* PATH_MAP_BUTTON = "Textures/Menus/Windows/Map Button.png";
     const char* PATH_WORLD1_BUTTON = "Textures/Menus/Map/World 1 Button.png";
     const char* PATH_WORLD2_BUTTON = "Textures/Menus/Map/World 2 Button.png";
+    const char* PATH_WORLD3_BUTTON = "Textures/Menus/Map/World 3 Button.png";
     const char* PATH_MY_FISH = "Textures/Fish/My Fish/My Fish.gif";
     const char* PATH_WORLD1 = "Textures/Worlds/World 1/World 1.png";
     const char* PATH_WORLD2 = "Textures/Worlds/World 2/World 2.png";
+    const char* PATH_WORLD3 = "Textures/Worlds/World 3/World 3.png";
     const char* PATH_FISH1 = "Textures/Fish/Fish 1/fish 1.gif";
     const char* PATH_FISH2 = "Textures/Fish/Fish 2/fish 2.gif";
     const char* PATH_FISH3 = "Textures/Fish/Fish 3/fish 3.gif";
@@ -1857,11 +1971,15 @@ int main()
     const char* PATH_FISH10 = "Textures/Fish/Fish 10/fish 10.gif";
     const char* PATH_FISH11 = "Textures/Fish/Fish 11/fish 11.gif";
     const char* PATH_CRAB1 = "Textures/Crabs/Crab 1/Crab 1.gif";
+    const char* PATH_CRAB2 = "Textures/Crabs/Crab 2/Crab 2.gif";
+    const char* PATH_JEFLLY_FISH1 = "Textures/Jelly Fish/Jelly Fish 1/Jelly Fish 1.gif";
+    const char* PATH_JEFLLY_FISH2 = "Textures/Jelly Fish/Jelly Fish 2/Jelly Fish 2.gif";
     
     // - Audio Paths
     const char* PATH_MUSIC_MAIN_THEME = "Music/Main Theme.mp3";
     const char* PATH_MUSIC_WORLD1 = "Music/World 1.mp3";
     const char* PATH_MUSIC_WORLD2 = "Music/World 2.mp3";
+    const char* PATH_MUSIC_WORLD3 = "Music/World 3.mp3";
     
     // - Other Paths
     string path_game_progress_file = "./save.txt";
@@ -1943,6 +2061,15 @@ int main()
     int crab1_image_frames_amount;
     Image crab1_image = LoadImageAnim(PATH_CRAB1, &crab1_image_frames_amount);
     
+    int crab2_image_frames_amount;
+    Image crab2_image = LoadImageAnim(PATH_CRAB2, &crab2_image_frames_amount);
+    
+    int jeflly_fish1_image_frames_amount;
+    Image jelly_fish1_image = LoadImageAnim(PATH_JEFLLY_FISH1, &jeflly_fish1_image_frames_amount);
+    
+    int jeflly_fish2_image_frames_amount;
+    Image jelly_fish2_image = LoadImageAnim(PATH_JEFLLY_FISH2, &jeflly_fish2_image_frames_amount);
+    
     // # ----- Load Audio ----- #
     
     Sound music_main_theme = LoadSound(PATH_MUSIC_MAIN_THEME);
@@ -1950,6 +2077,8 @@ int main()
     Sound music_world1 = LoadSound(PATH_MUSIC_WORLD1);
     
     Sound music_world2 = LoadSound(PATH_MUSIC_WORLD2);
+    
+    Sound music_world3 = LoadSound(PATH_MUSIC_WORLD3);
     
     Sound current_music;
     
@@ -1988,10 +2117,12 @@ int main()
     // Load the worlds buttons.
     Texture2D world1_button = LoadTexture(PATH_WORLD1_BUTTON);
     Texture2D world2_button = LoadTexture(PATH_WORLD2_BUTTON);
+    Texture2D world3_button = LoadTexture(PATH_WORLD3_BUTTON);
     
-    // Define frame rectangle for drawing
+    // Define frame rectangle for drawing.
     Rectangle world1_button_frame = { 100, 100, world1_button.width, world1_button.height };
-    Rectangle world2_button_frame = { 150, 300, world2_button.width, world2_button.height };
+    Rectangle world2_button_frame = { 250, 150, world2_button.width, world2_button.height };
+    Rectangle world3_button_frame = { 400, 225, world3_button.width, world3_button.height };
     
     // # ----- Windows ----- #
     
@@ -2023,7 +2154,7 @@ int main()
     // --- my fish ---
     
     Cell** world1_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world1_my_fish = MyFish(my_fish_image, &my_fish_image_frames_amount, Location(world1.width / 2, world1.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world1_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1);
+    MyFish world1_my_fish = MyFish(FPS, my_fish_image, &my_fish_image_frames_amount, false, Location(world1.width / 2, world1.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world1_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1);
 
     // --- Fish Network ---
    
@@ -2034,182 +2165,182 @@ int main()
     // Right.
     fish_path world1_fish1_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish1_wander_right_paths[] = {world1_fish1_path_wander_right};
-    paths_stack world1_fish1_paths_stack_wander_right = {Location(), 0, 1, world1_fish1_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish1_paths_stack_wander_right = {Location(), 0, 1, world1_fish1_wander_right_paths, false, false, false, false, true};
     
     // Left.
     fish_path world1_fish1_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish1_wander_left_paths[] = {world1_fish1_path_wander_left};
-    paths_stack world1_fish1_paths_stack_wander_left = {Location(), 0, 1, world1_fish1_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish1_paths_stack_wander_left = {Location(), 0, 1, world1_fish1_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish1_paths_stacks[] = {world1_fish1_paths_stack_wander_right, world1_fish1_paths_stack_wander_left};
-    fish_profile world1_fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish1_paths_stacks, 1};
+    fish_profile world1_fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish1_paths_stacks, 1};
     
     // - Fish 2 -
     
     // Right
     fish_path world1_fish2_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish2_wander_right_paths[] = {world1_fish2_path_wander_right};
-    paths_stack world1_fish2_paths_stack_wander_right = {Location(), 0, 1, world1_fish2_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish2_paths_stack_wander_right = {Location(), 0, 1, world1_fish2_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish2_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish2_wander_left_paths[] = {world1_fish2_path_wander_left};
-    paths_stack world1_fish2_paths_stack_wander_left = {Location(), 0, 1, world1_fish2_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish2_paths_stack_wander_left = {Location(), 0, 1, world1_fish2_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish2_paths_stacks[] = {world1_fish2_paths_stack_wander_right, world1_fish2_paths_stack_wander_left};
-    fish_profile world1_fish2 = {fish2_image, &fish2_image_frames_amount, "fish 2", false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish2_paths_stacks, 0.6};
+    fish_profile world1_fish2 = {fish2_image, &fish2_image_frames_amount, "fish 2", false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish2_paths_stacks, 0.6};
     
     // - Fish 3 -
     
     // Right
     fish_path world1_fish3_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish3_wander_right_paths[] = {world1_fish3_path_wander_right};
-    paths_stack world1_fish3_paths_stack_wander_right = {Location(), 0, 1, world1_fish3_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish3_paths_stack_wander_right = {Location(), 0, 1, world1_fish3_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish3_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish3_wander_left_paths[] = {world1_fish3_path_wander_left};
-    paths_stack world1_fish3_paths_stack_wander_left = {Location(), 0, 1, world1_fish3_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish3_paths_stack_wander_left = {Location(), 0, 1, world1_fish3_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish3_paths_stacks[] = {world1_fish3_paths_stack_wander_right, world1_fish3_paths_stack_wander_left};
-    fish_profile world1_fish3 = {fish3_image, &fish3_image_frames_amount, "fish 3", true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish3_paths_stacks, 1};
+    fish_profile world1_fish3 = {fish3_image, &fish3_image_frames_amount, "fish 3", false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish3_paths_stacks, 1};
     
     // - Fish 4 -
     
     // Right
     fish_path world1_fish4_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish4_wander_right_paths[] = {world1_fish4_path_wander_right};
-    paths_stack world1_fish4_paths_stack_wander_right = {Location(), 0, 1, world1_fish4_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish4_paths_stack_wander_right = {Location(), 0, 1, world1_fish4_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish4_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish4_wander_left_paths[] = {world1_fish4_path_wander_left};
-    paths_stack world1_fish4_paths_stack_wander_left = {Location(), 0, 1, world1_fish4_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish4_paths_stack_wander_left = {Location(), 0, 1, world1_fish4_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish4_paths_stacks[] = {world1_fish4_paths_stack_wander_right, world1_fish4_paths_stack_wander_left};
-    fish_profile world1_fish4 = {fish4_image, &fish4_image_frames_amount, "fish 4", true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish4_paths_stacks, 1.5};
+    fish_profile world1_fish4 = {fish4_image, &fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish4_paths_stacks, 1.5};
     
     // - Fish 5 -
     
     // Right
     fish_path world1_fish5_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish5_wander_right_paths[] = {world1_fish5_path_wander_right};
-    paths_stack world1_fish5_paths_stack_wander_right = {Location(), 0, 1, world1_fish5_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish5_paths_stack_wander_right = {Location(), 0, 1, world1_fish5_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish5_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish5_wander_left_paths[] = {world1_fish5_path_wander_left};
-    paths_stack world1_fish5_paths_stack_wander_left = {Location(), 0, 1, world1_fish5_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish5_paths_stack_wander_left = {Location(), 0, 1, world1_fish5_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish5_paths_stacks[] = {world1_fish5_paths_stack_wander_right, world1_fish5_paths_stack_wander_left};
-    fish_profile world1_fish5 = {fish5_image, &fish5_image_frames_amount, "fish 5", true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish5_paths_stacks, 1};
+    fish_profile world1_fish5 = {fish5_image, &fish5_image_frames_amount, "fish 5", false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish5_paths_stacks, 0.1};
     
     // - Fish 6 -
     
     // Right
     fish_path world1_fish6_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish6_wander_right_paths[] = {world1_fish6_path_wander_right};
-    paths_stack world1_fish6_paths_stack_wander_right = {Location(), 0, 1, world1_fish6_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish6_paths_stack_wander_right = {Location(), 0, 1, world1_fish6_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish6_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish6_wander_left_paths[] = {world1_fish6_path_wander_left};
-    paths_stack world1_fish6_paths_stack_wander_left = {Location(), 0, 1, world1_fish6_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish6_paths_stack_wander_left = {Location(), 0, 1, world1_fish6_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish6_paths_stacks[] = {world1_fish6_paths_stack_wander_right, world1_fish6_paths_stack_wander_left};
-    fish_profile world1_fish6 = {fish6_image, &fish6_image_frames_amount, "fish 6", false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish6_paths_stacks, 0.6};
+    fish_profile world1_fish6 = {fish6_image, &fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish6_paths_stacks, 0.1};
     
     // - Fish 7 -
     
     // Right
     fish_path world1_fish7_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish7_wander_right_paths[] = {world1_fish7_path_wander_right};
-    paths_stack world1_fish7_paths_stack_wander_right = {Location(), 0, 1, world1_fish7_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish7_paths_stack_wander_right = {Location(), 0, 1, world1_fish7_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish7_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish7_wander_left_paths[] = {world1_fish7_path_wander_left};
-    paths_stack world1_fish7_paths_stack_wander_left = {Location(), 0, 1, world1_fish7_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish7_paths_stack_wander_left = {Location(), 0, 1, world1_fish7_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish7_paths_stacks[] = {world1_fish7_paths_stack_wander_right, world1_fish7_paths_stack_wander_left};
-    fish_profile world1_fish7 = {fish7_image, &fish7_image_frames_amount, "fish 7", true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish7_paths_stacks, 0.33};
+    fish_profile world1_fish7 = {fish7_image, &fish7_image_frames_amount, "fish 7", false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish7_paths_stacks, 0.1};
     
     // - Fish 8 -
     
     // Right
     fish_path world1_fish8_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish8_wander_right_paths[] = {world1_fish8_path_wander_right};
-    paths_stack world1_fish8_paths_stack_wander_right = {Location(), 0, 1, world1_fish8_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish8_paths_stack_wander_right = {Location(), 0, 1, world1_fish8_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish8_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish8_wander_left_paths[] = {world1_fish8_path_wander_left};
-    paths_stack world1_fish8_paths_stack_wander_left = {Location(), 0, 1, world1_fish8_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish8_paths_stack_wander_left = {Location(), 0, 1, world1_fish8_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish8_paths_stacks[] = {world1_fish8_paths_stack_wander_right, world1_fish8_paths_stack_wander_left};
-    fish_profile world1_fish8 = {fish8_image, &fish8_image_frames_amount, "fish 8", true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish8_paths_stacks, 1.5};
+    fish_profile world1_fish8 = {fish8_image, &fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish8_paths_stacks, 1.5};
     
     // - Fish 9 -
     
     // Right
     fish_path world1_fish9_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish9_wander_right_paths[] = {world1_fish9_path_wander_right};
-    paths_stack world1_fish9_paths_stack_wander_right = {Location(), 0, 1, world1_fish9_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish9_paths_stack_wander_right = {Location(), 0, 1, world1_fish9_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish9_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish9_wander_left_paths[] = {world1_fish9_path_wander_left};
-    paths_stack world1_fish9_paths_stack_wander_left = {Location(), 0, 1, world1_fish9_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish9_paths_stack_wander_left = {Location(), 0, 1, world1_fish9_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish9_paths_stacks[] = {world1_fish9_paths_stack_wander_right, world1_fish9_paths_stack_wander_left};
-    fish_profile world1_fish9 = {fish9_image, &fish9_image_frames_amount, "fish 9", true, Size(150, 123), 3, 6, 13, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish9_paths_stacks, 0.33};
+    fish_profile world1_fish9 = {fish9_image, &fish9_image_frames_amount, "fish 9", false, true, Size(150, 123), 3, 6, 13, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish9_paths_stacks, 0.2};
     
     // - Fish 10 -
     
     // Right
     fish_path world1_fish10_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish10_wander_right_paths[] = {world1_fish10_path_wander_right};
-    paths_stack world1_fish10_paths_stack_wander_right = {Location(), 0, 1, world1_fish10_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish10_paths_stack_wander_right = {Location(), 0, 1, world1_fish10_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish10_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish10_wander_left_paths[] = {world1_fish10_path_wander_left};
-    paths_stack world1_fish10_paths_stack_wander_left = {Location(), 0, 1, world1_fish10_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish10_paths_stack_wander_left = {Location(), 0, 1, world1_fish10_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish10_paths_stacks[] = {world1_fish10_paths_stack_wander_right, world1_fish10_paths_stack_wander_left};
-    fish_profile world1_fish10 = {fish10_image, &fish10_image_frames_amount, "fish 10", false, Size(300, 287), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish10_paths_stacks, 0.1};
+    fish_profile world1_fish10 = {fish10_image, &fish10_image_frames_amount, "fish 10", true, false, Size(300, 287), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish10_paths_stacks, 0.05};
     
     // - Fish 11 -
     
     // Right
     fish_path world1_fish11_path_wander_right = {10, 0, true, true, 100};
     fish_path world1_fish11_wander_right_paths[] = {world1_fish11_path_wander_right};
-    paths_stack world1_fish11_paths_stack_wander_right = {Location(), 0, 1, world1_fish11_wander_right_paths, false, false, false, true};
+    paths_stack world1_fish11_paths_stack_wander_right = {Location(), 0, 1, world1_fish11_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world1_fish11_path_wander_left = {10, 0, false, true, 100};
     fish_path world1_fish11_wander_left_paths[] = {world1_fish11_path_wander_left};
-    paths_stack world1_fish11_paths_stack_wander_left = {Location(), 0, 1, world1_fish11_wander_left_paths, false, false, false, false};
+    paths_stack world1_fish11_paths_stack_wander_left = {Location(), 0, 1, world1_fish11_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world1_fish11_paths_stacks[] = {world1_fish11_paths_stack_wander_right, world1_fish11_paths_stack_wander_left};
-    fish_profile world1_fish11 = {fish11_image, &fish11_image_frames_amount, "fish 11", true, Size(300, 255), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish11_paths_stacks, 0.1};
+    fish_profile world1_fish11 = {fish11_image, &fish11_image_frames_amount, "fish 11", false, true, Size(300, 255), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish11_paths_stacks, 0.05};
     
     // -- Setup --
     
     fish_profile world1_fish_profiles_on_startup[] = {};
     fish_profile world1_available_fish[] = {world1_fish1, world1_fish2, world1_fish3, world1_fish4, world1_fish5, world1_fish6, world1_fish7, world1_fish8, world1_fish9, world1_fish10, world1_fish11};
-    FishNetwork world1_fish_network = FishNetwork(FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, world1_fish_profiles_on_startup, 0, world1_available_fish, 11, X_COORD_OFFSET);
+    FishNetwork world1_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, world1_fish_profiles_on_startup, 0, world1_available_fish, 11, X_COORD_OFFSET);
     world1_fish_network.update_boundaries(-X_COORD_OFFSET, world1.width + X_COORD_OFFSET, 0, world1.height, true);
 
     // ----- Final Set-ups World1 -----
@@ -2236,7 +2367,7 @@ int main()
     // --- my fish ---
     
     Cell** world2_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world2_my_fish = MyFish(my_fish_image, &my_fish_image_frames_amount, Location(world2.width / 2, world2.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world2_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1);
+    MyFish world2_my_fish = MyFish(FPS, my_fish_image, &my_fish_image_frames_amount, false, Location(world2.width / 2, world2.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world2_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1);
 
     // --- Fish Network ---
    
@@ -2247,201 +2378,201 @@ int main()
     // Right.
     fish_path world2_fish1_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish1_wander_right_paths[] = {world2_fish1_path_wander_right};
-    paths_stack world2_fish1_paths_stack_wander_right = {Location(), 0, 1, world2_fish1_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish1_paths_stack_wander_right = {Location(), 0, 1, world2_fish1_wander_right_paths, false, false, false, false, true};
     
     // Left.
     fish_path world2_fish1_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish1_wander_left_paths[] = {world2_fish1_path_wander_left};
-    paths_stack world2_fish1_paths_stack_wander_left = {Location(), 0, 1, world2_fish1_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish1_paths_stack_wander_left = {Location(), 0, 1, world2_fish1_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish1_paths_stacks[] = {world2_fish1_paths_stack_wander_right, world2_fish1_paths_stack_wander_left};
-    fish_profile world2_fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish1_paths_stacks, 1};
+    fish_profile world2_fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish1_paths_stacks, 0.8};
     
     // - Fish 2 -
     
     // Right
     fish_path world2_fish2_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish2_wander_right_paths[] = {world2_fish2_path_wander_right};
-    paths_stack world2_fish2_paths_stack_wander_right = {Location(), 0, 1, world2_fish2_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish2_paths_stack_wander_right = {Location(), 0, 1, world2_fish2_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish2_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish2_wander_left_paths[] = {world2_fish2_path_wander_left};
-    paths_stack world2_fish2_paths_stack_wander_left = {Location(), 0, 1, world2_fish2_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish2_paths_stack_wander_left = {Location(), 0, 1, world2_fish2_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish2_paths_stacks[] = {world2_fish2_paths_stack_wander_right, world2_fish2_paths_stack_wander_left};
-    fish_profile world2_fish2 = {fish2_image, &fish2_image_frames_amount, "fish 2", false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish2_paths_stacks, 0.6};
+    fish_profile world2_fish2 = {fish2_image, &fish2_image_frames_amount, "fish 2", false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish2_paths_stacks, 0.8};
     
     // - Fish 3 -
     
     // Right
     fish_path world2_fish3_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish3_wander_right_paths[] = {world2_fish3_path_wander_right};
-    paths_stack world2_fish3_paths_stack_wander_right = {Location(), 0, 1, world2_fish3_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish3_paths_stack_wander_right = {Location(), 0, 1, world2_fish3_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish3_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish3_wander_left_paths[] = {world2_fish3_path_wander_left};
-    paths_stack world2_fish3_paths_stack_wander_left = {Location(), 0, 1, world2_fish3_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish3_paths_stack_wander_left = {Location(), 0, 1, world2_fish3_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish3_paths_stacks[] = {world2_fish3_paths_stack_wander_right, world2_fish3_paths_stack_wander_left};
-    fish_profile world2_fish3 = {fish3_image, &fish3_image_frames_amount, "fish 3", true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish3_paths_stacks, 1};
+    fish_profile world2_fish3 = {fish3_image, &fish3_image_frames_amount, "fish 3", false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish3_paths_stacks, 1};
     
     // - Fish 4 -
     
     // Right
     fish_path world2_fish4_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish4_wander_right_paths[] = {world2_fish4_path_wander_right};
-    paths_stack world2_fish4_paths_stack_wander_right = {Location(), 0, 1, world2_fish4_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish4_paths_stack_wander_right = {Location(), 0, 1, world2_fish4_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish4_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish4_wander_left_paths[] = {world2_fish4_path_wander_left};
-    paths_stack world2_fish4_paths_stack_wander_left = {Location(), 0, 1, world2_fish4_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish4_paths_stack_wander_left = {Location(), 0, 1, world2_fish4_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish4_paths_stacks[] = {world2_fish4_paths_stack_wander_right, world2_fish4_paths_stack_wander_left};
-    fish_profile world2_fish4 = {fish4_image, &fish4_image_frames_amount, "fish 4", true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish4_paths_stacks, 1.5};
+    fish_profile world2_fish4 = {fish4_image, &fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish4_paths_stacks, 1};
     
     // - Fish 5 -
     
     // Right
     fish_path world2_fish5_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish5_wander_right_paths[] = {world2_fish5_path_wander_right};
-    paths_stack world2_fish5_paths_stack_wander_right = {Location(), 0, 1, world2_fish5_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish5_paths_stack_wander_right = {Location(), 0, 1, world2_fish5_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish5_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish5_wander_left_paths[] = {world2_fish5_path_wander_left};
-    paths_stack world2_fish5_paths_stack_wander_left = {Location(), 0, 1, world2_fish5_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish5_paths_stack_wander_left = {Location(), 0, 1, world2_fish5_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish5_paths_stacks[] = {world2_fish5_paths_stack_wander_right, world2_fish5_paths_stack_wander_left};
-    fish_profile world2_fish5 = {fish5_image, &fish5_image_frames_amount, "fish 5", true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish5_paths_stacks, 1};
+    fish_profile world2_fish5 = {fish5_image, &fish5_image_frames_amount, "fish 5", false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish5_paths_stacks, 0.8};
     
     // - Fish 6 -
     
     // Right
     fish_path world2_fish6_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish6_wander_right_paths[] = {world2_fish6_path_wander_right};
-    paths_stack world2_fish6_paths_stack_wander_right = {Location(), 0, 1, world2_fish6_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish6_paths_stack_wander_right = {Location(), 0, 1, world2_fish6_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish6_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish6_wander_left_paths[] = {world2_fish6_path_wander_left};
-    paths_stack world2_fish6_paths_stack_wander_left = {Location(), 0, 1, world2_fish6_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish6_paths_stack_wander_left = {Location(), 0, 1, world2_fish6_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish6_paths_stacks[] = {world2_fish6_paths_stack_wander_right, world2_fish6_paths_stack_wander_left};
-    fish_profile world2_fish6 = {fish6_image, &fish6_image_frames_amount, "fish 6", false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish6_paths_stacks, 0.6};
+    fish_profile world2_fish6 = {fish6_image, &fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish6_paths_stacks, 0.6};
     
     // - Fish 7 -
     
     // Right
     fish_path world2_fish7_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish7_wander_right_paths[] = {world2_fish7_path_wander_right};
-    paths_stack world2_fish7_paths_stack_wander_right = {Location(), 0, 1, world2_fish7_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish7_paths_stack_wander_right = {Location(), 0, 1, world2_fish7_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish7_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish7_wander_left_paths[] = {world2_fish7_path_wander_left};
-    paths_stack world2_fish7_paths_stack_wander_left = {Location(), 0, 1, world2_fish7_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish7_paths_stack_wander_left = {Location(), 0, 1, world2_fish7_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish7_paths_stacks[] = {world2_fish7_paths_stack_wander_right, world2_fish7_paths_stack_wander_left};
-    fish_profile world2_fish7 = {fish7_image, &fish7_image_frames_amount, "fish 7", true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish7_paths_stacks, 0.33};
+    fish_profile world2_fish7 = {fish7_image, &fish7_image_frames_amount, "fish 7", false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish7_paths_stacks, 0.8};
     
     // - Fish 8 -
     
     // Right
     fish_path world2_fish8_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish8_wander_right_paths[] = {world2_fish8_path_wander_right};
-    paths_stack world2_fish8_paths_stack_wander_right = {Location(), 0, 1, world2_fish8_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish8_paths_stack_wander_right = {Location(), 0, 1, world2_fish8_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish8_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish8_wander_left_paths[] = {world2_fish8_path_wander_left};
-    paths_stack world2_fish8_paths_stack_wander_left = {Location(), 0, 1, world2_fish8_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish8_paths_stack_wander_left = {Location(), 0, 1, world2_fish8_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish8_paths_stacks[] = {world2_fish8_paths_stack_wander_right, world2_fish8_paths_stack_wander_left};
-    fish_profile world2_fish8 = {fish8_image, &fish8_image_frames_amount, "fish 8", true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish8_paths_stacks, 1.5};
+    fish_profile world2_fish8 = {fish8_image, &fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish8_paths_stacks, 0.7};
     
     // - Fish 9 -
     
     // Right
     fish_path world2_fish9_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish9_wander_right_paths[] = {world2_fish9_path_wander_right};
-    paths_stack world2_fish9_paths_stack_wander_right = {Location(), 0, 1, world2_fish9_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish9_paths_stack_wander_right = {Location(), 0, 1, world2_fish9_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish9_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish9_wander_left_paths[] = {world2_fish9_path_wander_left};
-    paths_stack world2_fish9_paths_stack_wander_left = {Location(), 0, 1, world2_fish9_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish9_paths_stack_wander_left = {Location(), 0, 1, world2_fish9_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish9_paths_stacks[] = {world2_fish9_paths_stack_wander_right, world2_fish9_paths_stack_wander_left};
-    fish_profile world2_fish9 = {fish9_image, &fish9_image_frames_amount, "fish 9", true, Size(150, 123), 3, 6, 13, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish9_paths_stacks, 0.33};
+    fish_profile world2_fish9 = {fish9_image, &fish9_image_frames_amount, "fish 9", false, true, Size(150, 123), 3, 12, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish9_paths_stacks, 0.33};
     
     // - Fish 10 -
     
     // Right
     fish_path world2_fish10_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish10_wander_right_paths[] = {world2_fish10_path_wander_right};
-    paths_stack world2_fish10_paths_stack_wander_right = {Location(), 0, 1, world2_fish10_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish10_paths_stack_wander_right = {Location(), 0, 1, world2_fish10_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish10_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish10_wander_left_paths[] = {world2_fish10_path_wander_left};
-    paths_stack world2_fish10_paths_stack_wander_left = {Location(), 0, 1, world2_fish10_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish10_paths_stack_wander_left = {Location(), 0, 1, world2_fish10_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish10_paths_stacks[] = {world2_fish10_paths_stack_wander_right, world2_fish10_paths_stack_wander_left};
-    fish_profile world2_fish10 = {fish10_image, &fish10_image_frames_amount, "fish 10", false, Size(300, 287), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish10_paths_stacks, 0.1};
+    fish_profile world2_fish10 = {fish10_image, &fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish10_paths_stacks, 0.3};
     
     // - Fish 11 -
     
     // Right
     fish_path world2_fish11_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_fish11_wander_right_paths[] = {world2_fish11_path_wander_right};
-    paths_stack world2_fish11_paths_stack_wander_right = {Location(), 0, 1, world2_fish11_wander_right_paths, false, false, false, true};
+    paths_stack world2_fish11_paths_stack_wander_right = {Location(), 0, 1, world2_fish11_wander_right_paths, false, false, false, false, true};
     
     // Left
     fish_path world2_fish11_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_fish11_wander_left_paths[] = {world2_fish11_path_wander_left};
-    paths_stack world2_fish11_paths_stack_wander_left = {Location(), 0, 1, world2_fish11_wander_left_paths, false, false, false, false};
+    paths_stack world2_fish11_paths_stack_wander_left = {Location(), 0, 1, world2_fish11_wander_left_paths, false, false, false, false, false};
     
     // Fish profile.
     paths_stack world2_fish11_paths_stacks[] = {world2_fish11_paths_stack_wander_right, world2_fish11_paths_stack_wander_left};
-    fish_profile world2_fish11 = {fish11_image, &fish11_image_frames_amount, "fish 11", true, Size(300, 255), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish11_paths_stacks, 0.1};
+    fish_profile world2_fish11 = {fish11_image, &fish11_image_frames_amount, "fish 11", false, true, Size(600, 510), 2, 1, 10, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish11_paths_stacks, 0.2};
     
     // - Crab 1 -
     
     // Right
     fish_path world2_crab1_path_wander_right = {10, 0, true, true, 100};
     fish_path world2_crab1_wander_right_paths[] = {world2_crab1_path_wander_right};
-    paths_stack world2_crab1_paths_stack_wander_right = {Location(- X_COORD_OFFSET, world2.height - 50), world2.height - 50, 1, world2_crab1_wander_right_paths, false, false, true, true};
+    paths_stack world2_crab1_paths_stack_wander_right = {Location(- X_COORD_OFFSET, world2.height - 50), world2.height - 50, 1, world2_crab1_wander_right_paths, false, false, true, false, true};
     
     // Left
     fish_path world2_crab1_path_wander_left = {10, 0, false, true, 100};
     fish_path world2_crab1_wander_left_paths[] = {world2_crab1_path_wander_left};
-    paths_stack world2_crab1_paths_stack_wander_left = {Location(world2.width + X_COORD_OFFSET, world2.height - 50), world2.height - 50, 1, world2_crab1_wander_left_paths, false, false, true, false};
+    paths_stack world2_crab1_paths_stack_wander_left = {Location(world2.width + X_COORD_OFFSET, world2.height - 50), world2.height - 50, 1, world2_crab1_wander_left_paths, false, false, true, false, false};
     
     // Fish profile.
     paths_stack world2_crab1_paths_stacks[] = {world2_crab1_paths_stack_wander_right, world2_crab1_paths_stack_wander_left};
-    fish_profile world2_crab1 = {crab1_image, &crab1_image_frames_amount, "crab 1", true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world2_crab1_paths_stacks, 1};
-
+    fish_profile world2_crab1 = {crab1_image, &crab1_image_frames_amount, "crab 1", true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world2_crab1_paths_stacks, 1};
+    
     // -- Setup --
     
     fish_profile world2_fish_profiles_on_startup[] = {};
     fish_profile world2_available_fish[] = {world2_fish1, world2_fish2, world2_fish3, world2_fish4, world2_fish5, world2_fish6, world2_fish7, world2_fish8, world2_fish9, world2_fish10, world2_fish11, world2_crab1};
-    FishNetwork world2_fish_network = FishNetwork(FISH_POPULATION, EAT_GROW_RATIO, &world2_grid, world2_fish_profiles_on_startup, 0, world2_available_fish, 12, X_COORD_OFFSET);
-    world2_fish_network.update_boundaries(-X_COORD_OFFSET, world1.width + X_COORD_OFFSET, 0, world1.height, true);
+    FishNetwork world2_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world2_grid, world2_fish_profiles_on_startup, 0, world2_available_fish, 12, X_COORD_OFFSET);
+    world2_fish_network.update_boundaries(-X_COORD_OFFSET, world2.width + X_COORD_OFFSET, 0, world2.height, true);
 
-    // ----- Final Set-ups World1 -----
+    // ----- Final Set-ups World2 -----
 
     // Create and set-up the camera.
     Camera2D world2_camera = { 0 };
@@ -2452,8 +2583,181 @@ int main()
     if (debug_camera) { world2_camera.zoom = 0.15; }
     else { world2_camera.zoom = 0.7; }
     
+    // # ----- World 3 ----- #
+    
+    // Load Textures.
+    Texture2D world3 = LoadTexture(PATH_WORLD3);
+    
+    // Create the grid.
+    Grid world3_grid = Grid(GRID_COLS, GRID_ROWS, FISH_POPULATION, world3.width, world3.height);
+
+    // ----- Create Entities -----
+    
+    // --- my fish ---
+    
+    Cell** world3_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
+    MyFish world3_my_fish = MyFish(FPS, my_fish_image, &my_fish_image_frames_amount, false, Location(world3.width / 2, world3.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world3_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1);
+
+    // --- Fish Network ---
+
+    // -- Fish Profiles --
+    
+    // - Fish 4 -
+    
+    // Right
+    fish_path world3_fish4_path_wander_right = {10, 0, true, true, 100};
+    fish_path world3_fish4_wander_right_paths[] = {world3_fish4_path_wander_right};
+    paths_stack world3_fish4_paths_stack_wander_right = {Location(), 0, 1, world3_fish4_wander_right_paths, false, false, false, false, true};
+    
+    // Left
+    fish_path world3_fish4_path_wander_left = {10, 0, false, true, 100};
+    fish_path world3_fish4_wander_left_paths[] = {world3_fish4_path_wander_left};
+    paths_stack world3_fish4_paths_stack_wander_left = {Location(), 0, 1, world3_fish4_wander_left_paths, false, false, false, false, false};
+    
+    // Fish profile.
+    paths_stack world3_fish4_paths_stacks[] = {world3_fish4_paths_stack_wander_right, world3_fish4_paths_stack_wander_left};
+    fish_profile world3_fish4 = {fish4_image, &fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish4_paths_stacks, 2};
+    
+    // - Fish 6 -
+    
+    // Right
+    fish_path world3_fish6_path_wander_right = {10, 0, true, true, 100};
+    fish_path world3_fish6_wander_right_paths[] = {world3_fish6_path_wander_right};
+    paths_stack world3_fish6_paths_stack_wander_right = {Location(), 0, 1, world3_fish6_wander_right_paths, false, false, false, false, true};
+    
+    // Left
+    fish_path world3_fish6_path_wander_left = {10, 0, false, true, 100};
+    fish_path world3_fish6_wander_left_paths[] = {world3_fish6_path_wander_left};
+    paths_stack world3_fish6_paths_stack_wander_left = {Location(), 0, 1, world3_fish6_wander_left_paths, false, false, false, false, false};
+    
+    // Fish profile.
+    paths_stack world3_fish6_paths_stacks[] = {world3_fish6_paths_stack_wander_right, world3_fish6_paths_stack_wander_left};
+    fish_profile world3_fish6 = {fish6_image, &fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 2, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world3_fish6_paths_stacks, 0.6};
+    
+    // - Fish 8 -
+    
+    // Right
+    fish_path world3_fish8_path_wander_right = {10, 0, true, true, 100};
+    fish_path world3_fish8_wander_right_paths[] = {world3_fish8_path_wander_right};
+    paths_stack world3_fish8_paths_stack_wander_right = {Location(), 0, 1, world3_fish8_wander_right_paths, false, false, false, false, true};
+    
+    // Left
+    fish_path world3_fish8_path_wander_left = {10, 0, false, true, 100};
+    fish_path world3_fish8_wander_left_paths[] = {world3_fish8_path_wander_left};
+    paths_stack world3_fish8_paths_stack_wander_left = {Location(), 0, 1, world3_fish8_wander_left_paths, false, false, false, false, false};
+    
+    // Fish profile.
+    paths_stack world3_fish8_paths_stacks[] = {world3_fish8_paths_stack_wander_right, world3_fish8_paths_stack_wander_left};
+    fish_profile world3_fish8 = {fish8_image, &fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish8_paths_stacks, 2};
+    
+    // - Fish 10 -
+    
+    // Right
+    fish_path world3_fish10_path_wander_right = {10, 0, true, true, 100};
+    fish_path world3_fish10_wander_right_paths[] = {world3_fish10_path_wander_right};
+    paths_stack world3_fish10_paths_stack_wander_right = {Location(), 0, 1, world3_fish10_wander_right_paths, false, false, false, false, true};
+    
+    // Left
+    fish_path world3_fish10_path_wander_left = {10, 0, false, true, 100};
+    fish_path world3_fish10_wander_left_paths[] = {world3_fish10_path_wander_left};
+    paths_stack world3_fish10_paths_stack_wander_left = {Location(), 0, 1, world3_fish10_wander_left_paths, false, false, false, false, false};
+    
+    // Fish profile.
+    paths_stack world3_fish10_paths_stacks[] = {world3_fish10_paths_stack_wander_right, world3_fish10_paths_stack_wander_left};
+    fish_profile world3_fish10 = {fish10_image, &fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world3_fish10_paths_stacks, 0.05};
+    
+    // - Crab 1 -
+    
+    // Right
+    fish_path world3_crab1_path_wander_right = {10, 0, true, true, 100};
+    fish_path world3_crab1_wander_right_paths[] = {world3_crab1_path_wander_right};
+    paths_stack world3_crab1_paths_stack_wander_right = {Location(- X_COORD_OFFSET, world3.height - 50), world3.height - 50, 1, world3_crab1_wander_right_paths, false, false, true, false, true};
+    
+    // Left
+    fish_path world3_crab1_path_wander_left = {10, 0, false, true, 100};
+    fish_path world3_crab1_wander_left_paths[] = {world3_crab1_path_wander_left};
+    paths_stack world3_crab1_paths_stack_wander_left = {Location(world3.width + X_COORD_OFFSET, world3.height - 50), world3.height - 50, 1, world3_crab1_wander_left_paths, false, false, true, false, false};
+    
+    // Fish profile.
+    paths_stack world3_crab1_paths_stacks[] = {world3_crab1_paths_stack_wander_right, world3_crab1_paths_stack_wander_left};
+    fish_profile world3_crab1 = {crab1_image, &crab1_image_frames_amount, "crab 1", true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab1_paths_stacks, 1};
+
+    // - Crab 2 -
+    
+    // Right
+    fish_path world3_crab2_path_wander_right = {10, 0, true, true, 100};
+    fish_path world3_crab2_wander_right_paths[] = {world3_crab2_path_wander_right};
+    paths_stack world3_crab2_paths_stack_wander_right = {Location(- X_COORD_OFFSET, world3.height - 50), world3.height - 50, 1, world3_crab2_wander_right_paths, false, false, true, false, true};
+    
+    // Left
+    fish_path world3_crab2_path_wander_left = {10, 0, false, true, 100};
+    fish_path world3_crab2_wander_left_paths[] = {world3_crab2_path_wander_left};
+    paths_stack world3_crab2_paths_stack_wander_left = {Location(world3.width + X_COORD_OFFSET, world3.height - 50), world3.height - 50, 1, world3_crab2_wander_left_paths, false, false, true, false, false};
+    
+    // Fish profile.
+    paths_stack world3_crab2_paths_stacks[] = {world3_crab2_paths_stack_wander_right, world3_crab2_paths_stack_wander_left};
+    fish_profile world3_crab2 = {crab2_image, &crab2_image_frames_amount, "crab 2", false, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab2_paths_stacks, 1};
+
+    // - Jelly Fish 1 -
+    
+    // Falling down paths.
+    fish_path world3_jeflly_fish1_falling_down1 = {4, 40, true, false, 40};
+    fish_path world3_jeflly_fish1_falling_down2 = {5, 60, true, false, 40};
+    fish_path world3_jeflly_fish1_falling_down3 = {20, 35, true, false, 40};
+    fish_path world3_jeflly_fish1_moving_right = {13, 1, true, false, 50};
+    
+    fish_path world3_jelly_fish1_paths1[] = {world3_jeflly_fish1_falling_down1, world3_jeflly_fish1_moving_right};
+    fish_path world3_jelly_fish1_paths2[] = {world3_jeflly_fish1_falling_down2, world3_jeflly_fish1_moving_right};
+    fish_path world3_jelly_fish1_paths3[] = {world3_jeflly_fish1_falling_down3, world3_jeflly_fish1_moving_right};
+    
+    paths_stack world3_jelly_fish1_paths_stack_fall_down1 = {Location(), - jelly_fish1_image.height - 10, 2, world3_jelly_fish1_paths1, false, false, true, true, false};
+    paths_stack world3_jelly_fish1_paths_stack_fall_down2 = {Location(), - jelly_fish1_image.height - 10, 2, world3_jelly_fish1_paths2, false, false, true, true, false};
+    paths_stack world3_jelly_fish1_paths_stack_fall_down3 = {Location(), - jelly_fish1_image.height - 10, 2, world3_jelly_fish1_paths3, false, false, true, true, false};
+    
+    // Fish profile.
+    paths_stack world3_jelly_fish1_paths_stacks[] = {world3_jelly_fish1_paths_stack_fall_down1, world3_jelly_fish1_paths_stack_fall_down2, world3_jelly_fish1_paths_stack_fall_down3};
+    fish_profile world3_jeflly_fish1 = {jelly_fish1_image, &jeflly_fish1_image_frames_amount, "Jelly Fish", true, false, Size(200, 200), 1.3, 3, 20, 0, 7, 30, 300, 1.2, 2, true, 3, world3_jelly_fish1_paths_stacks, 1.5};
+    
+    // - Jelly Fish 2 -
+    
+    // Falling down paths.
+    fish_path world3_jeflly_fish2_falling_down1 = {4, 40, true, false, 40};
+    fish_path world3_jeflly_fish2_falling_down2 = {5, 60, true, false, 40};
+    fish_path world3_jeflly_fish2_falling_down3 = {20, 35, true, false, 40};
+    fish_path world3_jeflly_fish2_moving_right = {13, 1, true, false, 50};
+    
+    fish_path world3_jelly_fish2_paths1[] = {world3_jeflly_fish2_falling_down1, world3_jeflly_fish2_moving_right};
+    fish_path world3_jelly_fish2_paths2[] = {world3_jeflly_fish2_falling_down2, world3_jeflly_fish2_moving_right};
+    fish_path world3_jelly_fish2_paths3[] = {world3_jeflly_fish2_falling_down3, world3_jeflly_fish2_moving_right};
+    
+    paths_stack world3_jelly_fish2_paths_stack_fall_down1 = {Location(), - jelly_fish2_image.height - 10, 2, world3_jelly_fish2_paths1, false, false, true, true, false};
+    paths_stack world3_jelly_fish2_paths_stack_fall_down2 = {Location(), - jelly_fish2_image.height - 10, 2, world3_jelly_fish2_paths2, false, false, true, true, false};
+    paths_stack world3_jelly_fish2_paths_stack_fall_down3 = {Location(), - jelly_fish2_image.height - 10, 2, world3_jelly_fish2_paths3, false, false, true, true, false};
+    
+    // Fish profile.
+    paths_stack world3_jelly_fish2_paths_stacks[] = {world3_jelly_fish2_paths_stack_fall_down1, world3_jelly_fish2_paths_stack_fall_down2, world3_jelly_fish2_paths_stack_fall_down3};
+    fish_profile world3_jeflly_fish2 = {jelly_fish2_image, &jeflly_fish2_image_frames_amount, "Jelly Fish", true, false, Size(180, 180), 1.3, 3, 20, 0, 3, 30, 300, 1.2, 2, true, 3, world3_jelly_fish2_paths_stacks, 1.2};
+    
+    // -- Setup --
+    
+    fish_profile world3_fish_profiles_on_startup[] = {};
+    fish_profile world3_available_fish[] = {world3_fish4, world3_fish6, world3_fish8, world3_fish10, world3_crab1, world3_crab2, world3_jeflly_fish1, world3_jeflly_fish2};
+    FishNetwork world3_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world3_grid, world3_fish_profiles_on_startup, 0, world3_available_fish, 8, X_COORD_OFFSET);
+    world3_fish_network.update_boundaries(-X_COORD_OFFSET, world3.width + X_COORD_OFFSET, 0, world3.height, true);
+
+    // ----- Final Set-ups World3 -----
+
+    // Create and set-up the camera.
+    Camera2D world3_camera = { 0 };
+    world3_camera.target = (Vector2) { world3_my_fish.get_location().x, world3_my_fish.get_location().y };
+    world3_camera.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+    world3_camera.rotation = 0;
+    
+    if (debug_camera) { world3_camera.zoom = 0.15; }
+    else { world3_camera.zoom = 0.7; }
+    
     // Play the main theme music.
-    current_music = music_world1;
+    current_music = music_main_theme;
     PlaySound(current_music);
     
 	// ----- Game Loop -----
@@ -2528,6 +2832,28 @@ int main()
                 
                 continue;
             }
+            
+            // World 3 was pressed.
+            if (game_save.world_checkpoint >= 3 && CheckCollisionPointRec(mouse_point, world3_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                // Set the current world to world 3.
+                current_screen = "World";
+                current_world = 3;
+                world = world3;
+                my_fish = world3_my_fish;
+                fish_network = world3_fish_network;
+                grid = world3_grid;
+                camera = world3_camera;
+                grid.refresh_entity(&my_fish);
+                fish_network.setup();
+                
+                // Play the music of world 3.
+                StopSound(current_music);
+                current_music = music_world3;
+                PlaySound(current_music);
+                
+                continue;
+            }
         }
         
         else if (is_victory || is_defeat)
@@ -2580,6 +2906,25 @@ int main()
                     StopSound(current_music);
                 }
                 
+                // Reset the world.
+                if (current_world == 3)
+                {
+                    // Reset my fish.
+                    world3_my_fish.reset();
+                    
+                    // Reset the fish network.
+                    world3_fish_network.reset();
+
+                    // Reset the grid.
+                    world3_grid.reset();
+                    
+                    // Reset the camera.
+                    world3_camera.target = (Vector2) { world3_my_fish.get_location().x, world3_my_fish.get_location().y };
+                    
+                    // Stop the music.
+                    StopSound(current_music);
+                }
+                
                 // Change to the map, and reset the victory and defeat flags.
                 current_screen = "Map";
                 is_victory = false;
@@ -2610,6 +2955,9 @@ int main()
             
             // - Turbo.
             my_fish.update_turbo();
+            
+            // - Stunt.
+            my_fish.update_stunt();
             
             // - User Input Management -
 
@@ -2741,6 +3089,7 @@ int main()
                 // Draw the worlds buttons.
                 DrawTexture(world1_button, world1_button_frame.x, world1_button_frame.y, WHITE);
                 if (game_save.world_checkpoint >= 2) { DrawTexture(world2_button, world2_button_frame.x, world2_button_frame.y, WHITE); }
+                if (game_save.world_checkpoint >= 3) { DrawTexture(world3_button, world3_button_frame.x, world3_button_frame.y, WHITE); }
             }
             
             else if (current_screen == "World")
