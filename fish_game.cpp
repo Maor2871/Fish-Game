@@ -2158,8 +2158,8 @@ int main()
     
     // Define frame rectangle for drawing.
     Rectangle world1_button_frame = { 100, 100, world1_button.width, world1_button.height };
-    Rectangle world2_button_frame = { 300, 200, world2_button.width, world2_button.height };
-    Rectangle world3_button_frame = { 500, 350, world3_button.width, world3_button.height };
+    Rectangle world2_button_frame = { 300, 250, world2_button.width, world2_button.height };
+    Rectangle world3_button_frame = { 500, 400, world3_button.width, world3_button.height };
     
     // # ----- Windows ----- #
     
@@ -2793,6 +2793,20 @@ int main()
     if (debug_camera) { world3_camera.zoom = 0.15; }
     else { world3_camera.zoom = 0.7; }
     
+    // --- Load the world background to the main menu and map ---
+    
+    // Create the camera.
+    Camera2D camera_main_menu_map = { 0 };
+    camera_main_menu_map.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+    camera_main_menu_map.target = (Vector2) { (int) floor(world1.width / 2), (int) floor(world1.height / 2) };
+    camera_main_menu_map.zoom = 0.45;
+    current_world = 1;
+    world = world1;
+    fish_network = world1_fish_network;
+    grid = world1_grid;
+    camera = camera_main_menu_map;
+    fish_network.setup();
+    
     // Play the main theme music.
     current_music = music_main_theme;
     PlaySound(current_music);
@@ -2808,6 +2822,15 @@ int main()
         if (!IsSoundPlaying(current_music)) { PlaySound(current_music); }
         
         // --- Update Data ---
+        
+        if (current_screen == "Main Menu" || current_screen == "Map")
+        {
+            // Create the world background for the main menu and map.
+            fish_network.update_boundaries(-X_COORD_OFFSET, world.width + X_COORD_OFFSET, 0, world.height, true);
+            fish_network.load_available_fish(false);
+            fish_network.move();
+            fish_network.set_next_frame();
+        }
         
         if (current_screen == "Main Menu")
         {
@@ -2830,6 +2853,8 @@ int main()
             if (CheckCollisionPointRec(mouse_point, world1_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 // Set the current world to world 1.
+                world1_fish_network.reset();
+                world1_grid.reset();
                 current_screen = "World";
                 current_world = 1;
                 world = world1;
@@ -2852,6 +2877,8 @@ int main()
             if (game_save.world_checkpoint >= 2 && CheckCollisionPointRec(mouse_point, world2_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 // Set the current world to world 2.
+                world1_fish_network.reset();
+                world1_grid.reset();
                 current_screen = "World";
                 current_world = 2;
                 world = world2;
@@ -2874,6 +2901,8 @@ int main()
             if (game_save.world_checkpoint >= 3 && CheckCollisionPointRec(mouse_point, world3_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 // Set the current world to world 3.
+                world1_fish_network.reset();
+                world1_grid.reset();
                 current_screen = "World";
                 current_world = 3;
                 world = world3;
@@ -3103,11 +3132,22 @@ int main()
         
         BeginDrawing();
             
-            if (current_screen == "Main Menu")
+            if (current_screen == "Main Menu" || current_screen == "Map")
             {
                 // Clear the background.
                 ClearBackground(RAYWHITE);
-
+                
+                BeginMode2D(camera);
+                    
+                    // Draw the world in the background.
+                    DrawTexture(world, 0, 0, WHITE);
+                    fish_network.draw_next_frame();
+                    
+                EndMode2D();
+            }
+            
+            if (current_screen == "Main Menu")
+            {
                 // Draw the main menu image.
                 DrawTexture(main_menu, (int) floor (SCREEN_WIDTH / 2 - main_menu.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2), WHITE);
                 
@@ -3117,9 +3157,6 @@ int main()
                     
             else if (current_screen == "Map")
             {
-                // Clear the background.
-                ClearBackground(RAYWHITE);
-
                 // Draw the map image.
                 DrawTexture(map, (int) floor (SCREEN_WIDTH / 2 - map.width / 2), (int) floor(SCREEN_HEIGHT / 2 - map.height / 2), WHITE);
                 
@@ -3166,7 +3203,6 @@ int main()
                     // Draw the next gif frame of the fish.
                     fish_network.draw_next_frame();
                     my_fish.draw_next_frame();
-
 
                 // The end of the drawings affected by the camera.
                 EndMode2D();
