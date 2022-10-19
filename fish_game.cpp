@@ -995,7 +995,7 @@ class Fish : public MyGif
             current_stunt_frames_left = (int) floor(stunt_power * fps);
             
             // Calculate how much scale decreases each frame.
-            stunt_size_decrease_per_frame = (((scale - 1) / 2) * stunt_power) / current_stunt_frames_left;
+            stunt_size_decrease_per_frame = (((scale - 1) / 4) * stunt_power) / current_stunt_frames_left;
             
             // Save the current speed and stunt.
             original_speed_x = speed_x;
@@ -2206,6 +2206,7 @@ int main()
     // - Graphics Paths
     const char* PATH_MAIN_MENU = "Textures/Menus/Main Menu/Main Menu.png";
     const char* PATH_CAMPAIN_BUTTON = "Textures/Menus/Main Menu/Campain button.png";
+    const char* PATH_CAMPAIN_WELCOME = "Textures/Menus/Main Menu/Campain Welcome.png";
     const char* PATH_MAP = "Textures/Menus/Map/Map.png";
     const char* PATH_VICTORY = "Textures/Menus/Windows/Victory.png";
     const char* PATH_DEFEAT = "Textures/Menus/Windows/Defeat.png";
@@ -2261,6 +2262,7 @@ int main()
     
     // Load game progress data.
     Save game_save = Save(path_game_progress_file);
+    game_save.update_world_checkpoint(1);
 
 	// ### --- GUI Initialization --- ###
 	
@@ -2397,6 +2399,12 @@ int main()
     
     // Define frame rectangle for drawing.
     Rectangle campain_button_frame = { (int) floor (SCREEN_WIDTH / 2 - campain_button.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2) + 400, campain_button.width, campain_button.height };
+    
+    // Load the campain welcome window.
+    Texture2D campain_welcome_window = LoadTexture(PATH_CAMPAIN_WELCOME);
+    
+    // If true, show the campain welcome window.
+    bool is_campain_welcome_window = false;
     
     // The current mouse point location.
     Vector2 mouse_point = { 0, 0 };
@@ -2923,7 +2931,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish4_paths_stacks[] = {world3_fish4_paths_stack_wander_right, world3_fish4_paths_stack_wander_left};
-    fish_profile world3_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2};
+    fish_profile world3_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2.5};
     
     // - Fish 6 -
     
@@ -2939,7 +2947,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish6_paths_stacks[] = {world3_fish6_paths_stack_wander_right, world3_fish6_paths_stack_wander_left};
-    fish_profile world3_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 2, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world3_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.6};
+    fish_profile world3_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 2, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world3_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 8 -
     
@@ -2955,7 +2963,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish8_paths_stacks[] = {world3_fish8_paths_stack_wander_right, world3_fish8_paths_stack_wander_left};
-    fish_profile world3_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2};
+    fish_profile world3_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2.5};
     
     // - Fish 10 -
     
@@ -2971,7 +2979,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish10_paths_stacks[] = {world3_fish10_paths_stack_wander_right, world3_fish10_paths_stack_wander_left};
-    fish_profile world3_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world3_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.05};
+    fish_profile world3_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world3_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.07};
     
     // - Crab 1 -
     
@@ -3023,7 +3031,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_jelly_fish1_paths_stacks[] = {world3_jelly_fish1_paths_stack_fall_down1, world3_jelly_fish1_paths_stack_fall_down2, world3_jelly_fish1_paths_stack_fall_down3};
-    fish_profile world3_jeflly_fish1 = {images.jelly_fish1_image, &images.jeflly_fish1_image_frames_amount, "Jelly Fish", true, false, Size(200, 200), 1.3, 3, 20, 0, 7, 30, 300, 1.2, 2, true, 3, world3_jelly_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.5};
+    fish_profile world3_jeflly_fish1 = {images.jelly_fish1_image, &images.jeflly_fish1_image_frames_amount, "Jelly Fish", true, false, Size(200, 200), 1.3, 3, 20, 0, 7, 30, 300, 1.2, 2, true, 3, world3_jelly_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.3};
     
     // - Jelly Fish 2 -
     
@@ -3106,11 +3114,20 @@ int main()
         {
             // Get the current position of the mouse.
             mouse_point = GetMousePosition();
-
-            // The campain button was pressed.
-            if (CheckCollisionPointRec(mouse_point, campain_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            
+            // If currently showing the campain welcome window.
+            if (is_campain_welcome_window)
             {
-                current_screen = "Map";
+                // Check if the user finished reading.
+                if (IsKeyPressed(KEY_SPACE)) { current_screen = "Map"; is_campain_welcome_window = false; }
+            }
+            
+            // The campain button was pressed.
+            else if (CheckCollisionPointRec(mouse_point, campain_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                // If currently on the first world.
+                if (game_save.world_checkpoint == 1) { is_campain_welcome_window = true; }
+                else { current_screen = "Map"; }
             }
         }
         
@@ -3455,11 +3472,18 @@ int main()
             
             if (current_screen == "Main Menu")
             {
-                // Draw the main menu image.
-                DrawTexture(main_menu, (int) floor (SCREEN_WIDTH / 2 - main_menu.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2), WHITE);
+                // If we are on the campain welcome window.
+                if (is_campain_welcome_window) { DrawTexture(campain_welcome_window, (int) floor (SCREEN_WIDTH / 2 - campain_welcome_window.width / 2), (int) floor(SCREEN_HEIGHT / 2 - campain_welcome_window.height / 2), WHITE); }
                 
-                // Draw the campain button.
-                DrawTexture(campain_button, campain_button_frame.x, campain_button_frame.y, WHITE);
+                // Draw the main menu.
+                else
+                {
+                    // Draw the main menu image.
+                    DrawTexture(main_menu, (int) floor (SCREEN_WIDTH / 2 - main_menu.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2), WHITE);
+                
+                    // Draw the campain button.
+                    DrawTexture(campain_button, campain_button_frame.x, campain_button_frame.y, WHITE);
+                }               
             }
                     
             else if (current_screen == "Map")
