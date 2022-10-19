@@ -4,7 +4,8 @@
 #include <fstream>
 #include <random>
 #include <cmath>
-#include <thread>
+#include "pthread.h"
+#include <atomic> 
 using namespace std;
 
 
@@ -14,6 +15,14 @@ using namespace std;
              - Animations by: Terdpong.
 */
 
+
+// ----- Static Declarations -----
+
+
+// A thread friendly boolean indicator that all the data was loaded.
+static std::atomic_bool images_loaded = ATOMIC_VAR_INIT(false);
+static std::atomic_bool audio_loaded = ATOMIC_VAR_INIT(false);
+static int data_progress = 0;
 
 // ----- Basice Graphics classes -----
 
@@ -213,6 +222,107 @@ struct fish_profile
     
     // Indicates on the rarity of the fish. Try to avoid too large numbers. Do not use accuracy greater than 4 points after the decimal point.
     float proportion;   
+};
+
+// Declare the images struct.
+struct images_refrences 
+{
+    int count = 16;
+    
+    int my_fish_image_frames_amount;
+    Image my_fish_image;
+    const char* path_my_fish;
+    
+    int fish1_image_frames_amount;
+    Image fish1_image;
+    const char* path_fish1;
+    
+    int fish2_image_frames_amount;
+    Image fish2_image;
+    const char* path_fish2;
+    
+    int fish3_image_frames_amount;
+    Image fish3_image;
+    const char* path_fish3;
+    
+    int fish4_image_frames_amount;
+    Image fish4_image;
+    const char* path_fish4;
+    
+    int fish5_image_frames_amount;
+    Image fish5_image;
+    const char* path_fish5;
+    
+    int fish6_image_frames_amount;
+    Image fish6_image;
+    const char* path_fish6;
+    
+    int fish7_image_frames_amount;
+    Image fish7_image;
+    const char* path_fish7;
+    
+    int fish8_image_frames_amount;
+    Image fish8_image;
+    const char* path_fish8;
+    
+    int fish9_image_frames_amount;
+    Image fish9_image;
+    const char* path_fish9;
+    
+    int fish10_image_frames_amount;
+    Image fish10_image;
+    const char* path_fish10;
+    
+    int fish11_image_frames_amount;
+    Image fish11_image;
+    const char* path_fish11;
+    
+    int crab1_image_frames_amount;
+    Image crab1_image;
+    const char* path_crab1;
+    
+    int crab2_image_frames_amount;
+    Image crab2_image;
+    const char* path_crab2;
+    
+    int jeflly_fish1_image_frames_amount;
+    Image jelly_fish1_image;
+    const char* path_jelly_fish1;
+    
+    int jeflly_fish2_image_frames_amount;
+    Image jelly_fish2_image;
+    const char* path_jelly_fish2;
+};
+
+// Declare the Audio struct.
+struct audio_refrences 
+{
+    // Soundtrack equals 1, all the mini-sounds are altogether 1.
+    int count = 5;
+    
+    Sound music_main_theme;
+    const char* path_music_main_theme;
+    
+    Sound music_world1;
+    const char* path_music_world1;
+    
+    Sound music_world2;
+    const char* path_music_world2;
+    
+    Sound music_world3;
+    const char* path_music_world3;
+    
+    Sound sound_eat;
+    const char* path_sound_eat;
+    
+    Sound sound_eat_lower;
+    const char* path_sound_eat_lower;
+    
+    Sound sound_sting1;
+    const char* path_sound_sting1;
+    
+    Sound sound_sting1_lower;
+    const char* path_sound_sting1_lower;
 };
 
 
@@ -1977,6 +2087,107 @@ class Save
         }
 };
 
+
+// ----- Functions -----
+
+
+// The images loading function.
+static void* load_images_thread(void *images_argument)
+{
+    // Cast the images argument to images struct.
+    struct images_refrences *images = (struct images_refrences *)images_argument;
+    
+    images -> my_fish_image = LoadImageAnim(images -> path_my_fish, &images -> my_fish_image_frames_amount);
+    data_progress++;
+    
+    images -> fish1_image = LoadImageAnim(images -> path_fish1, &images -> fish1_image_frames_amount);
+    data_progress++;
+    
+    images -> fish2_image = LoadImageAnim(images -> path_fish2, &images -> fish2_image_frames_amount);
+    data_progress++;
+    
+    images -> fish3_image = LoadImageAnim(images -> path_fish3, &images -> fish3_image_frames_amount);
+    data_progress++;
+    
+    images -> fish4_image = LoadImageAnim(images -> path_fish4, &images -> fish4_image_frames_amount);
+    data_progress++;
+    
+    images -> fish5_image = LoadImageAnim(images -> path_fish5, &images -> fish5_image_frames_amount);
+    data_progress++;
+    
+    images -> fish6_image = LoadImageAnim(images -> path_fish6, &images -> fish6_image_frames_amount);
+    data_progress++;
+    
+    images -> fish7_image = LoadImageAnim(images -> path_fish7, &images -> fish7_image_frames_amount);
+    data_progress++;
+    
+    images -> fish8_image = LoadImageAnim(images -> path_fish8, &images -> fish8_image_frames_amount);
+    data_progress++;
+    
+    images -> fish9_image = LoadImageAnim(images -> path_fish9, &images -> fish9_image_frames_amount);
+    data_progress++;
+    
+    images -> fish10_image = LoadImageAnim(images -> path_fish10, &images -> fish10_image_frames_amount);
+    data_progress++;
+    
+    images -> fish11_image = LoadImageAnim(images -> path_fish11, &images -> fish11_image_frames_amount);
+    data_progress++;
+    
+    images -> crab1_image = LoadImageAnim(images -> path_crab1, &images -> crab1_image_frames_amount);
+    data_progress++;
+    
+    images -> crab2_image = LoadImageAnim(images -> path_crab2, &images -> crab2_image_frames_amount);
+    data_progress++;
+    
+    images -> jelly_fish1_image = LoadImageAnim(images -> path_jelly_fish1, &images -> jeflly_fish1_image_frames_amount);
+    data_progress++;
+    
+    images -> jelly_fish2_image = LoadImageAnim(images -> path_jelly_fish2, &images -> jeflly_fish2_image_frames_amount);
+    data_progress++;
+    
+    // Images loading finished. Notify the main thread.
+    atomic_store(&images_loaded, true);
+    
+    return NULL;
+}
+
+
+// The audio loading function.
+static void* load_audio_thread(void *audio_argument)
+{
+    // Cast the images argument to images struct.
+    struct audio_refrences *audio = (struct audio_refrences *)audio_argument;
+    
+    // Load music.
+    audio -> music_main_theme = LoadSound(audio -> path_music_main_theme);
+    data_progress++;
+    
+    audio -> music_world1 = LoadSound(audio -> path_music_world1);
+    data_progress++;
+    
+    audio -> music_world2 = LoadSound(audio -> path_music_world2);
+    data_progress++;
+    
+    audio -> music_world3 = LoadSound(audio -> path_music_world3);
+    data_progress++;
+    
+    // Load sound.
+    audio -> sound_eat = LoadSound(audio -> path_sound_eat);
+    
+    audio -> sound_eat_lower = LoadSound(audio -> path_sound_eat_lower);
+    
+    audio -> sound_sting1 = LoadSound(audio -> path_sound_sting1);
+    
+    audio -> sound_sting1_lower = LoadSound(audio -> path_sound_sting1_lower);
+    data_progress++;
+    
+    // Images loading finished. Notify the main thread.
+    atomic_store(&audio_loaded, true);
+    
+    return NULL;
+}
+
+
 // ----- Main Code -----
 
 
@@ -2075,75 +2286,91 @@ int main()
     // The current world.
     int current_world = 1;
     
-    // # ----- Load images ----- #
+    // # ----- Load Data ----- #
     
-    int my_fish_image_frames_amount;
-    Image my_fish_image = LoadImageAnim(PATH_MY_FISH, &my_fish_image_frames_amount);
+    // The images and audio loading process is the only heavy loading part in the game.
+    // Load as thread, and display loading bar to the user.
     
-    int fish1_image_frames_amount;
-    Image fish1_image = LoadImageAnim(PATH_FISH1, &fish1_image_frames_amount);
+    // Declare the threads.
+    pthread_t images_thread;
+    pthread_t audio_thread;
+
+    // Create the structs.
+    struct images_refrences images;
+    struct audio_refrences audio;
     
-    int fish2_image_frames_amount;
-    Image fish2_image = LoadImageAnim(PATH_FISH2, &fish2_image_frames_amount);
+    // Save the images paths.
+    images.path_my_fish = PATH_MY_FISH;
+    images.path_fish1 = PATH_FISH1;
+    images.path_fish2 = PATH_FISH2;
+    images.path_fish3 = PATH_FISH3;
+    images.path_fish4 = PATH_FISH4;
+    images.path_fish5 = PATH_FISH5;
+    images.path_fish6 = PATH_FISH6;
+    images.path_fish7 = PATH_FISH7;
+    images.path_fish8 = PATH_FISH8;
+    images.path_fish9 = PATH_FISH9;
+    images.path_fish10 = PATH_FISH10;
+    images.path_fish11 = PATH_FISH11;
+    images.path_crab1 = PATH_CRAB1;
+    images.path_crab2 = PATH_CRAB2;
+    images.path_jelly_fish1 = PATH_JEFLLY_FISH1;
+    images.path_jelly_fish2 = PATH_JEFLLY_FISH2;
     
-    int fish3_image_frames_amount;
-    Image fish3_image = LoadImageAnim(PATH_FISH3, &fish3_image_frames_amount);
+    // Save the audio paths.
+    audio.path_music_main_theme = PATH_MUSIC_MAIN_THEME;
+    audio.path_music_world1 = PATH_MUSIC_WORLD1;
+    audio.path_music_world2 = PATH_MUSIC_WORLD2;
+    audio.path_music_world3 = PATH_MUSIC_WORLD3;
+    audio.path_sound_eat = PATH_SOUND_EAT;
+    audio.path_sound_eat_lower = PATH_SOUND_EAT_LOWER;
+    audio.path_sound_sting1 = PATH_SOUND_STING1;
+    audio.path_sound_sting1_lower = PATH_SOUND_STING1_LOWER;
     
-    int fish4_image_frames_amount;
-    Image fish4_image = LoadImageAnim(PATH_FISH4, &fish4_image_frames_amount);
+    // Start the threads.
+    if (pthread_create(&images_thread, NULL, &load_images_thread, (void *)&images) != 0) {TraceLog(LOG_ERROR, "Error creating loading images thread"); CloseWindow(); return 0;}
+    if (pthread_create(&audio_thread, NULL, &load_audio_thread, (void *)&audio) != 0) {TraceLog(LOG_ERROR, "Error creating loading audio thread"); CloseWindow(); return 0;}
     
-    int fish5_image_frames_amount;
-    Image fish5_image = LoadImageAnim(PATH_FISH5, &fish5_image_frames_amount);
+    // If remains true after the loop, the user tries to exit.
+    bool is_user_exit = true;
     
-    int fish6_image_frames_amount;
-    Image fish6_image = LoadImageAnim(PATH_FISH6, &fish6_image_frames_amount);
+    // Keep iterating until data loaded.
+    while (!WindowShouldClose())
+    {
+        // All the images were loaded.
+        if (atomic_load(&images_loaded) && atomic_load(&audio_loaded)) { is_user_exit = false; break; }
+        
+        // Draw the progress bar.
+        BeginDrawing();
+
+            ClearBackground(SKYBLUE);
+
+            DrawRectangle((int) floor(SCREEN_WIDTH / 2) - 250, (int) floor(SCREEN_HEIGHT / 2) - 30, 500, 60, WHITE);
+
+            DrawRectangle((int) floor(SCREEN_WIDTH / 2) - 250, (int) floor(SCREEN_HEIGHT / 2) - 30, (int) floor(data_progress * (500 / (images.count + audio.count))), 60, DARKGRAY);
+            
+            DrawText("Loading...", (int) floor(SCREEN_WIDTH / 2) - 70, (int) floor(SCREEN_HEIGHT / 2) - 20, 40, BLACK);
+
+        EndDrawing();
+    }
     
-    int fish7_image_frames_amount;
-    Image fish7_image = LoadImageAnim(PATH_FISH7, &fish7_image_frames_amount);
+    // The user tried to exit.
+    if (is_user_exit) { CloseWindow(); return 0; }
     
-    int fish8_image_frames_amount;
-    Image fish8_image = LoadImageAnim(PATH_FISH8, &fish8_image_frames_amount);
-    
-    int fish9_image_frames_amount;
-    Image fish9_image = LoadImageAnim(PATH_FISH9, &fish9_image_frames_amount);
-    
-    int fish10_image_frames_amount;
-    Image fish10_image = LoadImageAnim(PATH_FISH10, &fish10_image_frames_amount);
-    
-    int fish11_image_frames_amount;
-    Image fish11_image = LoadImageAnim(PATH_FISH11, &fish11_image_frames_amount);
-    
-    int crab1_image_frames_amount;
-    Image crab1_image = LoadImageAnim(PATH_CRAB1, &crab1_image_frames_amount);
-    
-    int crab2_image_frames_amount;
-    Image crab2_image = LoadImageAnim(PATH_CRAB2, &crab2_image_frames_amount);
-    
-    int jeflly_fish1_image_frames_amount;
-    Image jelly_fish1_image = LoadImageAnim(PATH_JEFLLY_FISH1, &jeflly_fish1_image_frames_amount);
-    
-    int jeflly_fish2_image_frames_amount;
-    Image jelly_fish2_image = LoadImageAnim(PATH_JEFLLY_FISH2, &jeflly_fish2_image_frames_amount);
-    
-    // # ----- Load Audio ----- #
-    
-    Sound music_main_theme = LoadSound(PATH_MUSIC_MAIN_THEME);
-    
-    Sound music_world1 = LoadSound(PATH_MUSIC_WORLD1);
-    
-    Sound music_world2 = LoadSound(PATH_MUSIC_WORLD2);
-    
-    Sound music_world3 = LoadSound(PATH_MUSIC_WORLD3);
-    
-    Sound current_music;
-    
-    Sound sound_eat = LoadSound(PATH_SOUND_EAT);
-    
-    Sound sound_eat_lower = LoadSound(PATH_SOUND_EAT_LOWER);
-    
-    Sound sound_sting1 = LoadSound(PATH_SOUND_STING1);
-    
-    Sound sound_sting1_lower = LoadSound(PATH_SOUND_STING1_LOWER);
+    // Tell the user we are about to finish loading.
+    else
+    {
+        // Draw the progress bar.
+        BeginDrawing();
+
+            ClearBackground(SKYBLUE);
+
+            DrawRectangle((int) floor(SCREEN_WIDTH / 2) - 250, (int) floor(SCREEN_HEIGHT / 2) - 30, (int) floor(data_progress * (500 / (images.count + audio.count))), 60, DARKGRAY);
+            
+            DrawText("Let's Go!", (int) floor(SCREEN_WIDTH / 2) - 100, (int) floor(SCREEN_HEIGHT / 2) - 20, 40, WHITE);
+
+        EndDrawing();
+    }
     
     // # ----- Variables -----
 
@@ -2228,7 +2455,7 @@ int main()
     // --- my fish ---
     
     Cell** world1_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world1_my_fish = MyFish(FPS, my_fish_image, &my_fish_image_frames_amount, false, Location(world1.width / 2, world1.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world1_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, sound_eat, sound_sting1);
+    MyFish world1_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world1.width / 2, world1.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world1_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
 
     // --- Fish Network ---
    
@@ -2248,7 +2475,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish1_paths_stacks[] = {world1_fish1_paths_stack_wander_right, world1_fish1_paths_stack_wander_left};
-    fish_profile world1_fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish1_paths_stacks, sound_eat_lower, sound_sting1_lower, 1};
+    fish_profile world1_fish1 = {images.fish1_image, &images.fish1_image_frames_amount, "fish 1", false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // - Fish 2 -
     
@@ -2264,7 +2491,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish2_paths_stacks[] = {world1_fish2_paths_stack_wander_right, world1_fish2_paths_stack_wander_left};
-    fish_profile world1_fish2 = {fish2_image, &fish2_image_frames_amount, "fish 2", false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish2_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.6};
+    fish_profile world1_fish2 = {images.fish2_image, &images.fish2_image_frames_amount, "fish 2", false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.6};
     
     // - Fish 3 -
     
@@ -2280,7 +2507,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish3_paths_stacks[] = {world1_fish3_paths_stack_wander_right, world1_fish3_paths_stack_wander_left};
-    fish_profile world1_fish3 = {fish3_image, &fish3_image_frames_amount, "fish 3", false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish3_paths_stacks, sound_eat_lower, sound_sting1_lower, 1};
+    fish_profile world1_fish3 = {images.fish3_image, &images.fish3_image_frames_amount, "fish 3", false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish3_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // - Fish 4 -
     
@@ -2296,7 +2523,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish4_paths_stacks[] = {world1_fish4_paths_stack_wander_right, world1_fish4_paths_stack_wander_left};
-    fish_profile world1_fish4 = {fish4_image, &fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish4_paths_stacks, sound_eat_lower, sound_sting1_lower, 1.5};
+    fish_profile world1_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.5};
     
     // - Fish 5 -
     
@@ -2312,7 +2539,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish5_paths_stacks[] = {world1_fish5_paths_stack_wander_right, world1_fish5_paths_stack_wander_left};
-    fish_profile world1_fish5 = {fish5_image, &fish5_image_frames_amount, "fish 5", false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish5_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.1};
+    fish_profile world1_fish5 = {images.fish5_image, &images.fish5_image_frames_amount, "fish 5", false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish5_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.1};
     
     // - Fish 6 -
     
@@ -2328,7 +2555,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish6_paths_stacks[] = {world1_fish6_paths_stack_wander_right, world1_fish6_paths_stack_wander_left};
-    fish_profile world1_fish6 = {fish6_image, &fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish6_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.1};
+    fish_profile world1_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.1};
     
     // - Fish 7 -
     
@@ -2344,7 +2571,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish7_paths_stacks[] = {world1_fish7_paths_stack_wander_right, world1_fish7_paths_stack_wander_left};
-    fish_profile world1_fish7 = {fish7_image, &fish7_image_frames_amount, "fish 7", false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish7_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.1};
+    fish_profile world1_fish7 = {images.fish7_image, &images.fish7_image_frames_amount, "fish 7", false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish7_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.1};
     
     // - Fish 8 -
     
@@ -2360,7 +2587,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish8_paths_stacks[] = {world1_fish8_paths_stack_wander_right, world1_fish8_paths_stack_wander_left};
-    fish_profile world1_fish8 = {fish8_image, &fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish8_paths_stacks, sound_eat_lower, sound_sting1_lower, 1.5};
+    fish_profile world1_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.5};
     
     // - Fish 9 -
     
@@ -2376,7 +2603,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish9_paths_stacks[] = {world1_fish9_paths_stack_wander_right, world1_fish9_paths_stack_wander_left};
-    fish_profile world1_fish9 = {fish9_image, &fish9_image_frames_amount, "fish 9", false, true, Size(150, 123), 3, 6, 13, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish9_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.2};
+    fish_profile world1_fish9 = {images.fish9_image, &images.fish9_image_frames_amount, "fish 9", false, true, Size(150, 123), 3, 6, 13, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish9_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.2};
     
     // - Fish 10 -
     
@@ -2392,7 +2619,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish10_paths_stacks[] = {world1_fish10_paths_stack_wander_right, world1_fish10_paths_stack_wander_left};
-    fish_profile world1_fish10 = {fish10_image, &fish10_image_frames_amount, "fish 10", true, false, Size(300, 287), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish10_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.05};
+    fish_profile world1_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", true, false, Size(300, 287), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.05};
     
     // - Fish 11 -
     
@@ -2408,7 +2635,7 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish11_paths_stacks[] = {world1_fish11_paths_stack_wander_right, world1_fish11_paths_stack_wander_left};
-    fish_profile world1_fish11 = {fish11_image, &fish11_image_frames_amount, "fish 11", false, true, Size(300, 255), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish11_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.05};
+    fish_profile world1_fish11 = {images.fish11_image, &images.fish11_image_frames_amount, "fish 11", false, true, Size(300, 255), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish11_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.05};
     
     // -- Setup --
     
@@ -2444,7 +2671,7 @@ int main()
     // --- my fish ---
     
     Cell** world2_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world2_my_fish = MyFish(FPS, my_fish_image, &my_fish_image_frames_amount, false, Location(world2.width / 2, world2.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world2_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, sound_eat, sound_sting1);
+    MyFish world2_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world2.width / 2, world2.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world2_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
 
     // --- Fish Network ---
    
@@ -2464,7 +2691,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish1_paths_stacks[] = {world2_fish1_paths_stack_wander_right, world2_fish1_paths_stack_wander_left};
-    fish_profile world2_fish1 = {fish1_image, &fish1_image_frames_amount, "fish 1", false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish1_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.8};
+    fish_profile world2_fish1 = {images.fish1_image, &images.fish1_image_frames_amount, "fish 1", false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 2 -
     
@@ -2480,7 +2707,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish2_paths_stacks[] = {world2_fish2_paths_stack_wander_right, world2_fish2_paths_stack_wander_left};
-    fish_profile world2_fish2 = {fish2_image, &fish2_image_frames_amount, "fish 2", false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish2_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.8};
+    fish_profile world2_fish2 = {images.fish2_image, &images.fish2_image_frames_amount, "fish 2", false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 3 -
     
@@ -2496,7 +2723,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish3_paths_stacks[] = {world2_fish3_paths_stack_wander_right, world2_fish3_paths_stack_wander_left};
-    fish_profile world2_fish3 = {fish3_image, &fish3_image_frames_amount, "fish 3", false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish3_paths_stacks, sound_eat_lower, sound_sting1_lower, 1};
+    fish_profile world2_fish3 = {images.fish3_image, &images.fish3_image_frames_amount, "fish 3", false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish3_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // - Fish 4 -
     
@@ -2512,7 +2739,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish4_paths_stacks[] = {world2_fish4_paths_stack_wander_right, world2_fish4_paths_stack_wander_left};
-    fish_profile world2_fish4 = {fish4_image, &fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish4_paths_stacks, sound_eat_lower, sound_sting1_lower, 1};
+    fish_profile world2_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // - Fish 5 -
     
@@ -2528,7 +2755,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish5_paths_stacks[] = {world2_fish5_paths_stack_wander_right, world2_fish5_paths_stack_wander_left};
-    fish_profile world2_fish5 = {fish5_image, &fish5_image_frames_amount, "fish 5", false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish5_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.8};
+    fish_profile world2_fish5 = {images.fish5_image, &images.fish5_image_frames_amount, "fish 5", false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish5_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 6 -
     
@@ -2544,7 +2771,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish6_paths_stacks[] = {world2_fish6_paths_stack_wander_right, world2_fish6_paths_stack_wander_left};
-    fish_profile world2_fish6 = {fish6_image, &fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish6_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.6};
+    fish_profile world2_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.6};
     
     // - Fish 7 -
     
@@ -2560,7 +2787,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish7_paths_stacks[] = {world2_fish7_paths_stack_wander_right, world2_fish7_paths_stack_wander_left};
-    fish_profile world2_fish7 = {fish7_image, &fish7_image_frames_amount, "fish 7", false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish7_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.8};
+    fish_profile world2_fish7 = {images.fish7_image, &images.fish7_image_frames_amount, "fish 7", false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish7_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 8 -
     
@@ -2576,7 +2803,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish8_paths_stacks[] = {world2_fish8_paths_stack_wander_right, world2_fish8_paths_stack_wander_left};
-    fish_profile world2_fish8 = {fish8_image, &fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish8_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.7};
+    fish_profile world2_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.7};
     
     // - Fish 9 -
     
@@ -2592,7 +2819,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish9_paths_stacks[] = {world2_fish9_paths_stack_wander_right, world2_fish9_paths_stack_wander_left};
-    fish_profile world2_fish9 = {fish9_image, &fish9_image_frames_amount, "fish 9", false, true, Size(150, 123), 3, 12, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish9_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.33};
+    fish_profile world2_fish9 = {images.fish9_image, &images.fish9_image_frames_amount, "fish 9", false, true, Size(150, 123), 3, 12, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish9_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.33};
     
     // - Fish 10 -
     
@@ -2608,7 +2835,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish10_paths_stacks[] = {world2_fish10_paths_stack_wander_right, world2_fish10_paths_stack_wander_left};
-    fish_profile world2_fish10 = {fish10_image, &fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish10_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.3};
+    fish_profile world2_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.3};
     
     // - Fish 11 -
     
@@ -2624,7 +2851,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish11_paths_stacks[] = {world2_fish11_paths_stack_wander_right, world2_fish11_paths_stack_wander_left};
-    fish_profile world2_fish11 = {fish11_image, &fish11_image_frames_amount, "fish 11", false, true, Size(600, 510), 2, 1, 10, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish11_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.2};
+    fish_profile world2_fish11 = {images.fish11_image, &images.fish11_image_frames_amount, "fish 11", false, true, Size(600, 510), 2, 1, 10, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish11_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.2};
     
     // - Crab 1 -
     
@@ -2640,7 +2867,7 @@ int main()
     
     // Fish profile.
     paths_stack world2_crab1_paths_stacks[] = {world2_crab1_paths_stack_wander_right, world2_crab1_paths_stack_wander_left};
-    fish_profile world2_crab1 = {crab1_image, &crab1_image_frames_amount, "crab 1", true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world2_crab1_paths_stacks, sound_eat_lower, sound_sting1_lower, 1};
+    fish_profile world2_crab1 = {images.crab1_image, &images.crab1_image_frames_amount, "crab 1", true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world2_crab1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // -- Setup --
     
@@ -2676,7 +2903,7 @@ int main()
     // --- my fish ---
     
     Cell** world3_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world3_my_fish = MyFish(FPS, my_fish_image, &my_fish_image_frames_amount, false, Location(world3.width / 2, world3.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world3_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, sound_eat, sound_sting1);
+    MyFish world3_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world3.width / 2, world3.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world3_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
 
     // --- Fish Network ---
 
@@ -2696,7 +2923,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish4_paths_stacks[] = {world3_fish4_paths_stack_wander_right, world3_fish4_paths_stack_wander_left};
-    fish_profile world3_fish4 = {fish4_image, &fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish4_paths_stacks, sound_eat_lower, sound_sting1_lower, 2};
+    fish_profile world3_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2};
     
     // - Fish 6 -
     
@@ -2712,7 +2939,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish6_paths_stacks[] = {world3_fish6_paths_stack_wander_right, world3_fish6_paths_stack_wander_left};
-    fish_profile world3_fish6 = {fish6_image, &fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 2, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world3_fish6_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.6};
+    fish_profile world3_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 2, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world3_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.6};
     
     // - Fish 8 -
     
@@ -2728,7 +2955,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish8_paths_stacks[] = {world3_fish8_paths_stack_wander_right, world3_fish8_paths_stack_wander_left};
-    fish_profile world3_fish8 = {fish8_image, &fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish8_paths_stacks, sound_eat_lower, sound_sting1_lower, 2};
+    fish_profile world3_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2};
     
     // - Fish 10 -
     
@@ -2744,7 +2971,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish10_paths_stacks[] = {world3_fish10_paths_stack_wander_right, world3_fish10_paths_stack_wander_left};
-    fish_profile world3_fish10 = {fish10_image, &fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world3_fish10_paths_stacks, sound_eat_lower, sound_sting1_lower, 0.05};
+    fish_profile world3_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world3_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.05};
     
     // - Crab 1 -
     
@@ -2760,7 +2987,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_crab1_paths_stacks[] = {world3_crab1_paths_stack_wander_right, world3_crab1_paths_stack_wander_left};
-    fish_profile world3_crab1 = {crab1_image, &crab1_image_frames_amount, "crab 1", true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab1_paths_stacks, sound_eat_lower, sound_sting1_lower, 1};
+    fish_profile world3_crab1 = {images.crab1_image, &images.crab1_image_frames_amount, "crab 1", true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
 
     // - Crab 2 -
     
@@ -2776,7 +3003,7 @@ int main()
     
     // Fish profile.
     paths_stack world3_crab2_paths_stacks[] = {world3_crab2_paths_stack_wander_right, world3_crab2_paths_stack_wander_left};
-    fish_profile world3_crab2 = {crab2_image, &crab2_image_frames_amount, "crab 2", false, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab2_paths_stacks, sound_eat_lower, sound_sting1_lower, 1};
+    fish_profile world3_crab2 = {images.crab2_image, &images.crab2_image_frames_amount, "crab 2", false, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
 
     // - Jelly Fish 1 -
     
@@ -2790,13 +3017,13 @@ int main()
     fish_path world3_jelly_fish1_paths2[] = {world3_jeflly_fish1_falling_down2, world3_jeflly_fish1_moving_right};
     fish_path world3_jelly_fish1_paths3[] = {world3_jeflly_fish1_falling_down3, world3_jeflly_fish1_moving_right};
     
-    paths_stack world3_jelly_fish1_paths_stack_fall_down1 = {Location(), - jelly_fish1_image.height - 10, 2, world3_jelly_fish1_paths1, false, false, true, true, false};
-    paths_stack world3_jelly_fish1_paths_stack_fall_down2 = {Location(), - jelly_fish1_image.height - 10, 2, world3_jelly_fish1_paths2, false, false, true, true, false};
-    paths_stack world3_jelly_fish1_paths_stack_fall_down3 = {Location(), - jelly_fish1_image.height - 10, 2, world3_jelly_fish1_paths3, false, false, true, true, false};
+    paths_stack world3_jelly_fish1_paths_stack_fall_down1 = {Location(), - images.jelly_fish1_image.height - 10, 2, world3_jelly_fish1_paths1, false, false, true, true, false};
+    paths_stack world3_jelly_fish1_paths_stack_fall_down2 = {Location(), - images.jelly_fish1_image.height - 10, 2, world3_jelly_fish1_paths2, false, false, true, true, false};
+    paths_stack world3_jelly_fish1_paths_stack_fall_down3 = {Location(), - images.jelly_fish1_image.height - 10, 2, world3_jelly_fish1_paths3, false, false, true, true, false};
     
     // Fish profile.
     paths_stack world3_jelly_fish1_paths_stacks[] = {world3_jelly_fish1_paths_stack_fall_down1, world3_jelly_fish1_paths_stack_fall_down2, world3_jelly_fish1_paths_stack_fall_down3};
-    fish_profile world3_jeflly_fish1 = {jelly_fish1_image, &jeflly_fish1_image_frames_amount, "Jelly Fish", true, false, Size(200, 200), 1.3, 3, 20, 0, 7, 30, 300, 1.2, 2, true, 3, world3_jelly_fish1_paths_stacks, sound_eat_lower, sound_sting1_lower, 1.5};
+    fish_profile world3_jeflly_fish1 = {images.jelly_fish1_image, &images.jeflly_fish1_image_frames_amount, "Jelly Fish", true, false, Size(200, 200), 1.3, 3, 20, 0, 7, 30, 300, 1.2, 2, true, 3, world3_jelly_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.5};
     
     // - Jelly Fish 2 -
     
@@ -2810,13 +3037,13 @@ int main()
     fish_path world3_jelly_fish2_paths2[] = {world3_jeflly_fish2_falling_down2, world3_jeflly_fish2_moving_right};
     fish_path world3_jelly_fish2_paths3[] = {world3_jeflly_fish2_falling_down3, world3_jeflly_fish2_moving_right};
     
-    paths_stack world3_jelly_fish2_paths_stack_fall_down1 = {Location(), - jelly_fish2_image.height - 10, 2, world3_jelly_fish2_paths1, false, false, true, true, false};
-    paths_stack world3_jelly_fish2_paths_stack_fall_down2 = {Location(), - jelly_fish2_image.height - 10, 2, world3_jelly_fish2_paths2, false, false, true, true, false};
-    paths_stack world3_jelly_fish2_paths_stack_fall_down3 = {Location(), - jelly_fish2_image.height - 10, 2, world3_jelly_fish2_paths3, false, false, true, true, false};
+    paths_stack world3_jelly_fish2_paths_stack_fall_down1 = {Location(), - images.jelly_fish2_image.height - 10, 2, world3_jelly_fish2_paths1, false, false, true, true, false};
+    paths_stack world3_jelly_fish2_paths_stack_fall_down2 = {Location(), - images.jelly_fish2_image.height - 10, 2, world3_jelly_fish2_paths2, false, false, true, true, false};
+    paths_stack world3_jelly_fish2_paths_stack_fall_down3 = {Location(), - images.jelly_fish2_image.height - 10, 2, world3_jelly_fish2_paths3, false, false, true, true, false};
     
     // Fish profile.
     paths_stack world3_jelly_fish2_paths_stacks[] = {world3_jelly_fish2_paths_stack_fall_down1, world3_jelly_fish2_paths_stack_fall_down2, world3_jelly_fish2_paths_stack_fall_down3};
-    fish_profile world3_jeflly_fish2 = {jelly_fish2_image, &jeflly_fish2_image_frames_amount, "Jelly Fish", true, false, Size(180, 180), 1.3, 3, 20, 0, 3, 30, 300, 1.2, 2, true, 3, world3_jelly_fish2_paths_stacks, sound_eat_lower, sound_sting1_lower, 1.2};
+    fish_profile world3_jeflly_fish2 = {images.jelly_fish2_image, &images.jeflly_fish2_image_frames_amount, "Jelly Fish", true, false, Size(180, 180), 1.3, 3, 20, 0, 3, 30, 300, 1.2, 2, true, 3, world3_jelly_fish2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.2};
     
     // -- Setup --
     
@@ -2851,7 +3078,7 @@ int main()
     fish_network.setup();
     
     // Play the main theme music.
-    current_music = music_main_theme;
+    Sound current_music = audio.music_main_theme;
     PlaySound(current_music);
    
 	// ----- Game Loop -----
@@ -2914,7 +3141,7 @@ int main()
                 
                 // Play the music of world 1.
                 StopSound(current_music);
-                current_music = music_world1;
+                current_music = audio.music_world1;
                 PlaySound(current_music);
                 
                 continue;
@@ -2942,7 +3169,7 @@ int main()
                 
                 // Play the music of world 2.
                 StopSound(current_music);
-                current_music = music_world2;
+                current_music = audio.music_world2;
                 PlaySound(current_music);
                 
                 continue;
@@ -2970,7 +3197,7 @@ int main()
                 
                 // Play the music of world 3.
                 StopSound(current_music);
-                current_music = music_world3;
+                current_music = audio.music_world3;
                 PlaySound(current_music);
                 
                 continue;
@@ -3060,8 +3287,8 @@ int main()
                 fish_network.setup();
                 
                 // Change the music back to the theme.
-                current_music = music_main_theme;
-                PlaySound(music_main_theme);
+                current_music = audio.music_main_theme;
+                PlaySound(current_music);
             }
         }
         
@@ -3345,21 +3572,16 @@ int main()
 	
     my_fish.delete_gif();
     fish_network.delete_network();
-    
-    // Remove the image.
-    UnloadImage(my_fish_image);
-    UnloadImage(fish1_image);
-    
+
     // Close all the musics.
-    //UnloadMusicStream(music_main_theme);
-    UnloadSound(music_main_theme);
-    UnloadSound(music_world1);
-    UnloadSound(music_world2);
-    UnloadSound(music_world3);
-    UnloadSound(sound_eat);
-    UnloadSound(sound_eat_lower);
-    UnloadSound(sound_sting1);
-    UnloadSound(sound_sting1_lower);
+    UnloadSound(audio.music_main_theme);
+    UnloadSound(audio.music_world1);
+    UnloadSound(audio.music_world2);
+    UnloadSound(audio.music_world3);
+    UnloadSound(audio.sound_eat);
+    UnloadSound(audio.sound_eat_lower);
+    UnloadSound(audio.sound_sting1);
+    UnloadSound(audio.sound_sting1_lower);
     
     
     CloseAudioDevice();
