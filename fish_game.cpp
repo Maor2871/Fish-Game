@@ -615,11 +615,7 @@ class Grid
             Location location = new_entity -> get_location();
             Size size = new_entity -> get_size();
             float scale = new_entity -> get_scale();
-
-            // Calculate the current actual size of the entity.
-            int width = (int) floor(sqrt(scale) * size.width);
-            int height = (int) floor(sqrt(scale) * size.height);
-            
+           
             // Calculate the x boundaries.
             int x_boundary_left = location.x - ((sqrt(scale) * size.width) / 2);
             int x_boundary_right = x_boundary_left + (sqrt(scale) * size.width);
@@ -804,7 +800,7 @@ class MyGif: public GridEntity
         void draw_next_frame()
         {
             // -1 cause flip, 1 do not flips.
-            int flip_width = 1, flip_height = 1;
+            float flip_width = 1, flip_height = 1;
             
             // Check if required flipping.
             if (is_flip_horizontal) {flip_width = -1;}
@@ -814,7 +810,7 @@ class MyGif: public GridEntity
             Rectangle source = {0, 0, flip_width * my_gif_texture.width, flip_height * my_gif_texture.height};
             
             // Where to draw the gif. The input location is where to put the center on the screen.
-            Rectangle destination = {location.x, location.y, (int) floor(sqrt(scale) * size.width), (int) floor(sqrt(scale) * size.height)};
+            Rectangle destination = {(float) location.x, (float) location.y, (float) floor(sqrt(scale) * size.width), (float) floor(sqrt(scale) * size.height)};
             
             // We want the gif to be rotated in relation to its center, and we want that the inputed location in the destination rectangle will be the center.
             Vector2 center = {(sqrt(scale) * size.width) / 2, (sqrt(scale) * size.height) / 2};
@@ -955,28 +951,28 @@ class Fish : public MyGif
         }
 
         // Apply movements (including boundaries check).
-        void move_left() 
+        void move_left(float ratio) 
         {
-            if (location.x - speed_x < left_boundary) { location.x = left_boundary; boundary_exceed(); is_fish_out_of_bounds = true; }
-            else { location.x -= speed_x; flip_horizontal(); }
+            if (location.x - (int)(ratio * speed_x) < left_boundary) { location.x = left_boundary; boundary_exceed(); is_fish_out_of_bounds = true; }
+            else { location.x -= (int)floor(ratio * speed_x + 0.5); flip_horizontal(); }
         }
         
-        void move_right() 
+        void move_right(float ratio) 
         {
-            if (location.x + speed_x > right_boundary) { location.x = right_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
-            else { location.x += speed_x; unflip_horizontal(); }
+            if (location.x + (int) (ratio * speed_x) > right_boundary) { location.x = right_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
+            else { location.x += (int)floor(ratio * speed_x + 0.5); unflip_horizontal(); }
         }
         
-        void move_up() 
+        void move_up(float ratio) 
         {
-            if (location.y - speed_y < top_boundary) { location.y = top_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
-            else { location.y -= speed_y; }
+            if (location.y - (int)(ratio * speed_y) < top_boundary) { location.y = top_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
+            else { location.y -= (int)floor(ratio * speed_y + 0.5); }
         }
         
-        void move_down() 
+        void move_down(float ratio) 
         {
-            if (location.y + speed_y > bottom_boundary) { location.y = bottom_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
-            else { location.y += speed_y; }
+            if (location.y + (int)(ratio * speed_y) > bottom_boundary) { location.y = bottom_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
+            else { location.y += (int)floor(ratio * speed_y + 0.5); }
         }
         
         // The function causes the fish a jelly fish stunt.
@@ -1262,6 +1258,74 @@ class MyFish : public Fish
             scale = original_scale;
         }
         
+        // The function moves the fish towards the received destination.
+        void move_towards(Location destination)
+        {
+            float new_y;
+            float displacement_x = destination.x - location.x;
+            float displacement_y = destination.y - location.y;
+            
+            // If the distance is less than the speed, set the destination as the new location.
+            if (sqrt(pow(displacement_x, 2) + pow(displacement_y, 2)) < speed_x)
+            {
+                if (destination.x > location.x) { move_right(((float)destination.x - location.x) / speed_x); }
+                else { move_left((float)(location.x - destination.x) / speed_x); }
+            }
+            
+            // Find the line (connecting the current location and the destination) equation.
+            float slope = displacement_y / displacement_x;
+            float n = destination.y - (slope * destination.x);
+
+            // Movement only on one axis.
+            if (slope == 0) 
+            {
+                if (displacement_x >= 0) { move_right(1); }
+                else { move_left(1); }
+                return;
+            }
+            
+            // The values for the quadratic formula (using the distance equation).
+            float a = pow(slope, 2) + 1;
+            float b = 2 * slope * n -2 * slope * location.y -2 * location.x;
+            float c = pow(n, 2) -2 * n * location.y + pow(location.y, 2) + pow(location.x, 2) - pow(speed_x, 2);
+            
+            // The discriminant is negative, move up or down.
+            if (pow(b, 2) -4 * a * c < 0)
+            {
+                if (destination.y < location.y) { move_up(1); }
+                else { move_down(1); }
+                return;
+            }
+            
+            // The solutions of the quadratic formula.
+            float new_x_1 = ( - b + sqrt(pow(b, 2) -4 * a * c)) / (2 * a);
+            float new_x_2 = ( - b - sqrt(pow(b, 2) -4 * a * c)) / (2 * a);
+            
+            // Too large numbers (probably because the slope is too high).
+            if (new_x_1 != new_x_1 || new_x_2 != new_x_2)
+            {
+                if (destination.y < location.y) { move_up(1); }
+                else { move_down(1); }
+                return;
+            }
+            
+            // Find the desired solution and calculate the new y.
+            if (destination.x > location.x)
+            {
+                if (new_x_1 > location.x) { move_right(min((float)1, (float)(new_x_1 - location.x) / speed_x)); new_y = slope * new_x_1 + n; }
+                else { move_right(min((float)1, (float)(new_x_2 - location.x) / speed_x)); new_y = slope * new_x_2 + n; }
+            }
+            else
+            {
+                if (new_x_1 < location.x) { move_left(min((float)1, (float)(new_x_1 - location.x) / speed_x)); new_y = slope * new_x_1 + n; }
+                else { move_left(min((float)1, (float)(location.x - new_x_2) / speed_x)); new_y = slope * new_x_2 + n; }
+            }
+
+            // Check if need to move up or down.
+            if (destination.y < location.y) { move_up(min((float)1, (float)(location.y - new_y) / speed_x)); }
+            else { move_down(min((float)1, (float)(new_y - location.y) / speed_x)); }
+        }
+        
         // Returns true if my fish has reached its required scale.
         bool is_victory() { return scale >= required_scale; }
         
@@ -1306,6 +1370,7 @@ class MyFish : public Fish
         
         void draw_turbo_widget()
         {
+            /*
             // Draw the turbo title.
             DrawText("Turbo", turbo_widget_location.x - 75, turbo_widget_location.y, 25, BLACK);
             
@@ -1317,6 +1382,7 @@ class MyFish : public Fish
             
             // Draw the fill rectangle.
             DrawRectangle(turbo_widget_location.x, turbo_widget_location.y, (int) (turbo_widget_size.width * ((float)(turbo_reload_frames - turbo_reload_frames_left) / turbo_reload_frames)), turbo_widget_size.height, RED);
+            */
         }
 };
 
@@ -1484,10 +1550,10 @@ class WanderFish : public Fish
             if (current_path.current_frames_left > 0)
             {               
                 // Move in the current path direction.
-                if (current_path.is_moving_right) { move_right(); }
-                else { move_left(); }
-                if (current_path.is_moving_top) { move_up(); }
-                else { move_down(); }
+                if (current_path.is_moving_right) { move_right(1); }
+                else { move_left(1); }
+                if (current_path.is_moving_top) { move_up(1); }
+                else { move_down(1); }
                 
                 // Decrease the amount of frames left by 1.
                 current_path.current_frames_left -= 1;
@@ -1912,9 +1978,9 @@ class Save
             world_checkpoint = 1;
             
             // - Read the file -
-            
+            TraceLog(1, "Trying to load..");
             if (!save_file) { return; }
-            
+            TraceLog(1, "Loaded!");
             // The current line read from the file.
             string current_line;
             
@@ -1936,7 +2002,7 @@ class Save
                 if (current_line.rfind("world checkpoint: ", 0) == 0)
                 {
                     int world_checkpoint_length = ((string) ("world checkpoint: ")).length();
-                    if (current_line.length() >= world_checkpoint_length + 2 && isdigit(current_line[world_checkpoint_length]) && isdigit(current_line[world_checkpoint_length + 1])) 
+                    if ((int) current_line.length() >= (int) world_checkpoint_length + 2 && isdigit(current_line[world_checkpoint_length]) && isdigit(current_line[world_checkpoint_length + 1])) 
                     {
                         string number = current_line.substr(world_checkpoint_length, 2);
                         world_checkpoint = stoi(number); 
@@ -1968,16 +2034,16 @@ class Save
             int world_checkpoint_length = ((string) "world checkpoint: ").length();
 
             // Iterate over the content of the file.
-            while (current_index < current_file_content.length())
+            while (current_index < (int) current_file_content.length())
             {
                 // This is the end of the current line.
-                if (current_file_content[current_index] == '\\' && current_index + 1 < (current_file_content.length()) && current_file_content[current_index + 1] == 'n') { current_line = ""; continue; }
+                if (current_file_content[current_index] == '\\' && current_index + 1 < (int) (current_file_content.length()) && current_file_content[current_index + 1] == 'n') { current_line = ""; continue; }
                 
                 // Add the next character of the line.
                 current_line += current_file_content[current_index];
                 
                 // Make the check.
-                if (current_line.substr(0, world_checkpoint_length) == "world checkpoint: " && current_line.length() == world_checkpoint_length + 2)
+                if (current_line.substr(0, world_checkpoint_length) == "world checkpoint: " && (int) current_line.length() == world_checkpoint_length + 2)
                 {
                     current_file_content[current_index - 1] = world_checkpoint_string[0];
                     current_file_content[current_index] = world_checkpoint_string[1];
@@ -2018,10 +2084,10 @@ class Save
             string encrypted = "";
             
             // Iterate over the received string.
-            for (int i = 0; i < to_encrypt.length(); i++)
+            for (int i = 0; i < (int) to_encrypt.length(); i++)
             {
                 // Keep on the lines structure.
-                if (to_encrypt[i] == '\\' && i + 1 < (to_encrypt.length()) && to_encrypt[i + 1] == 'n') { to_encrypt[i] = '\\'; to_encrypt[i + 1] = 'n'; i += 1; continue; }
+                if (to_encrypt[i] == '\\' && i + 1 < (int) (to_encrypt.length()) && to_encrypt[i + 1] == 'n') { to_encrypt[i] = '\\'; to_encrypt[i + 1] = 'n'; i += 1; continue; }
 
                 // Encrypt the current char.
                 encrypted += to_string(int(to_encrypt[i]) * (i + 4) + 7) + "_";
@@ -2047,7 +2113,7 @@ class Save
             int char_index = 0;
 
             // Iterate over the received string.
-            while (index < to_decrypt.length())
+            while (index < (int) to_decrypt.length())
             {
                 // Is the current decrypted character fully loaded?
                 if (to_decrypt[index] == '_')
@@ -2198,58 +2264,59 @@ int main()
 	// ### --- Constants --- ###
 	
 	// - Screen
-	int SCREEN_WIDTH = 1000;
-	int SCREEN_HEIGHT = 800;
+	int SCREEN_WIDTH = 0;
+	int SCREEN_HEIGHT = 0;
 	const char* SCREEN_TITLE = "The Fish";
 	const int FPS = 30;
     
     // - Graphics Paths
-    const char* PATH_MAIN_MENU = "Textures/Menus/Main Menu/Main Menu.png";
-    const char* PATH_CAMPAIN_BUTTON = "Textures/Menus/Main Menu/Campain button.png";
-    const char* PATH_CAMPAIN_WELCOME = "Textures/Menus/Main Menu/Campain Welcome.png";
-    const char* PATH_MAP = "Textures/Menus/Map/Map.png";
-    const char* PATH_VICTORY = "Textures/Menus/Windows/Victory.png";
-    const char* PATH_DEFEAT = "Textures/Menus/Windows/Defeat.png";
-    const char* PATH_MAP_BUTTON = "Textures/Menus/Windows/Map Button.png";
-    const char* PATH_WORLD1_BUTTON = "Textures/Menus/Map/World 1 Button.png";
-    const char* PATH_WORLD2_BUTTON = "Textures/Menus/Map/World 2 Button.png";
-    const char* PATH_WORLD3_BUTTON = "Textures/Menus/Map/World 3 Button.png";
-    const char* PATH_EXIT_WELCOME_WINDOW_BUTTON = "Textures/Worlds/Exit World Window.png";
-    const char* PATH_WORLD1_WELCOME_WINDOW = "Textures/Worlds/World 1/World 1 Welcome.png";
-    const char* PATH_WORLD2_WELCOME_WINDOW = "Textures/Worlds/World 2/World 2 Welcome.png";
-    const char* PATH_WORLD3_WELCOME_WINDOW = "Textures/Worlds/World 3/World 3 Welcome.png";
-    const char* PATH_MY_FISH = "Textures/Fish/My Fish/My Fish.gif";
-    const char* PATH_WORLD1 = "Textures/Worlds/World 1/World 1.png";
-    const char* PATH_WORLD2 = "Textures/Worlds/World 2/World 2.png";
-    const char* PATH_WORLD3 = "Textures/Worlds/World 3/World 3.png";
-    const char* PATH_FISH1 = "Textures/Fish/Fish 1/fish 1.gif";
-    const char* PATH_FISH2 = "Textures/Fish/Fish 2/fish 2.gif";
-    const char* PATH_FISH3 = "Textures/Fish/Fish 3/fish 3.gif";
-    const char* PATH_FISH4 = "Textures/Fish/Fish 4/fish 4.gif";
-    const char* PATH_FISH5 = "Textures/Fish/Fish 5/fish 5.gif";
-    const char* PATH_FISH6 = "Textures/Fish/Fish 6/fish 6.gif";
-    const char* PATH_FISH7 = "Textures/Fish/Fish 7/fish 7.gif";
-    const char* PATH_FISH8 = "Textures/Fish/Fish 8/fish 8.gif";
-    const char* PATH_FISH9 = "Textures/Fish/Fish 9/fish 9.gif";
-    const char* PATH_FISH10 = "Textures/Fish/Fish 10/fish 10.gif";
-    const char* PATH_FISH11 = "Textures/Fish/Fish 11/fish 11.gif";
-    const char* PATH_CRAB1 = "Textures/Crabs/Crab 1/Crab 1.gif";
-    const char* PATH_CRAB2 = "Textures/Crabs/Crab 2/Crab 2.gif";
-    const char* PATH_JEFLLY_FISH1 = "Textures/Jelly Fish/Jelly Fish 1/Jelly Fish 1.gif";
-    const char* PATH_JEFLLY_FISH2 = "Textures/Jelly Fish/Jelly Fish 2/Jelly Fish 2.gif";
+    const char* PATH_MAIN_MENU = "resources/Textures/Menus/Main Menu/Main Menu.png";
+    const char* PATH_CAMPAIN_BUTTON = "resources/Textures/Menus/Main Menu/Campain Button.png";
+    const char* PATH_CAMPAIN_WELCOME = "resources/Textures/Menus/Main Menu/Campain Welcome.png";
+    const char* PATH_MAP = "resources/Textures/Menus/Map/Map.png";
+    const char* PATH_VICTORY = "resources/Textures/Menus/Windows/Victory.png";
+    const char* PATH_DEFEAT = "resources/Textures/Menus/Windows/Defeat.png";
+    const char* PATH_MAP_BUTTON = "resources/Textures/Menus/Windows/Map Button.png";
+    const char* PATH_TURBO_BUTTON = "resources/Textures/Worlds/Turbo Button.png";
+    const char* PATH_WORLD1_BUTTON = "resources/Textures/Menus/Map/World 1 Button.png";
+    const char* PATH_WORLD2_BUTTON = "resources/Textures/Menus/Map/World 2 Button.png";
+    const char* PATH_WORLD3_BUTTON = "resources/Textures/Menus/Map/World 3 Button.png";
+    const char* PATH_EXIT_WELCOME_WINDOW_BUTTON = "resources/Textures/Worlds/Exit World Window.png";
+    const char* PATH_WORLD1_WELCOME_WINDOW = "resources/Textures/Worlds/World 1/World 1 Welcome.png";
+    const char* PATH_WORLD2_WELCOME_WINDOW = "resources/Textures/Worlds/World 2/World 2 Welcome.png";
+    const char* PATH_WORLD3_WELCOME_WINDOW = "resources/Textures/Worlds/World 3/World 3 Welcome.png";
+    const char* PATH_MY_FISH = "resources/Textures/Fish/My Fish/My Fish.gif";
+    const char* PATH_WORLD1 = "resources/Textures/Worlds/World 1/World 1.png";
+    const char* PATH_WORLD2 = "resources/Textures/Worlds/World 2/World 2.png";
+    const char* PATH_WORLD3 = "resources/Textures/Worlds/World 3/World 3.png";
+    const char* PATH_FISH1 = "resources/Textures/Fish/Fish 1/Fish 1.gif";
+    const char* PATH_FISH2 = "resources/Textures/Fish/Fish 2/Fish 2.gif";
+    const char* PATH_FISH3 = "resources/Textures/Fish/Fish 3/Fish 3.gif";
+    const char* PATH_FISH4 = "resources/Textures/Fish/Fish 4/Fish 4.gif";
+    const char* PATH_FISH5 = "resources/Textures/Fish/Fish 5/Fish 5.gif";
+    const char* PATH_FISH6 = "resources/Textures/Fish/Fish 6/Fish 6.gif";
+    const char* PATH_FISH7 = "resources/Textures/Fish/Fish 7/Fish 7.gif";
+    const char* PATH_FISH8 = "resources/Textures/Fish/Fish 8/Fish 8.gif";
+    const char* PATH_FISH9 = "resources/Textures/Fish/Fish 9/Fish 9.gif";
+    const char* PATH_FISH10 = "resources/Textures/Fish/Fish 10/Fish 10.gif";
+    const char* PATH_FISH11 = "resources/Textures/Fish/Fish 11/Fish 11.gif";
+    const char* PATH_CRAB1 = "resources/Textures/Crabs/Crab 1/Crab 1.gif";
+    const char* PATH_CRAB2 = "resources/Textures/Crabs/Crab 2/Crab 2.gif";
+    const char* PATH_JEFLLY_FISH1 = "resources/Textures/Jelly Fish/Jelly Fish 1/Jelly Fish 1.gif";
+    const char* PATH_JEFLLY_FISH2 = "resources/Textures/Jelly Fish/Jelly Fish 2/Jelly Fish 2.gif";
     
     // - Audio Paths
-    const char* PATH_MUSIC_MAIN_THEME = "Music/Main Theme.mp3";
-    const char* PATH_MUSIC_WORLD1 = "Music/World 1.mp3";
-    const char* PATH_MUSIC_WORLD2 = "Music/World 2.mp3";
-    const char* PATH_MUSIC_WORLD3 = "Music/World 3.mp3";
-    const char* PATH_SOUND_EAT = "Music/Sounds/Eat.mp3";
-    const char* PATH_SOUND_EAT_LOWER = "Music/Sounds/Eat Lower.mp3";
-    const char* PATH_SOUND_STING1 = "Music/Sounds/Sting 1.mp3";
-    const char* PATH_SOUND_STING1_LOWER = "Music/Sounds/Sting 1 Lower.mp3";
+    const char* PATH_MUSIC_MAIN_THEME = "resources/Music/Main Theme.mp3";
+    const char* PATH_MUSIC_WORLD1 = "resources/Music/World 1.mp3";
+    const char* PATH_MUSIC_WORLD2 = "resources/Music/World 2.mp3";
+    const char* PATH_MUSIC_WORLD3 = "resources/Music/World 3.mp3";
+    const char* PATH_SOUND_EAT = "resources/Music/Sounds/Eat.mp3";
+    const char* PATH_SOUND_EAT_LOWER = "resources/Music/Sounds/Eat Lower.mp3";
+    const char* PATH_SOUND_STING1 = "resources/Music/Sounds/Sting 1.mp3";
+    const char* PATH_SOUND_STING1_LOWER = "resources/Music/Sounds/Sting 1 Lower.mp3";
     
     // - Other Paths
-    string path_game_progress_file = "./save.txt";
+    string path_game_progress_file = "resources/save.txt";
     
     // - Game Properties
     const int FISH_POPULATION = 50;
@@ -2260,14 +2327,15 @@ int main()
     bool debug = false;
     bool debug_camera = false;
     
+    SetTraceLogLevel(1);
+    
     // Load game progress data.
     Save game_save = Save(path_game_progress_file);
-    game_save.update_world_checkpoint(1);
 
 	// ### --- GUI Initialization --- ###
 	
-	// Screen set-up.
-	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE);
+    // Screen set-up.
+	InitWindow(0, 0, SCREEN_TITLE);
     
     // Audio set-up.
     InitAudioDevice();
@@ -2275,12 +2343,9 @@ int main()
 	// Fps declaration.
 	SetTargetFPS(FPS);
     
-    // Set to full screen and save dimensions in SCREEN_WIDTH, SCREEN_HEIGHT.
-    int monitor = GetCurrentMonitor();
-    SCREEN_WIDTH = GetMonitorWidth(monitor);
-    SCREEN_HEIGHT = GetMonitorHeight(monitor);
-    SetWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-    ToggleFullscreen();
+    // Save the screen size.
+    SCREEN_WIDTH = GetScreenWidth();
+    SCREEN_HEIGHT = GetScreenHeight();
     
     // Defines the current screen in the main loop.
     string current_screen = "Main Menu";
@@ -2388,6 +2453,11 @@ int main()
     int camera_current_height = 0, camera_current_width = 0;
     bool is_world_welcome_window = false;
     Texture2D current_world_welcome_window;
+    int current_gesture = GESTURE_NONE;
+    Location current_touch_location;
+    Location first_touch_location, second_touch_location, previous_second_touch_location;
+    Location destination;
+    bool is_camera_dispatch_x = false, is_camera_dispatch_y = false, is_camera_dispatch_x_left = false, is_camera_dispatch_x_right = false, is_camera_dispatch_y_top = false, is_camera_dispatch_y_bottom = false;
     
     // # ----- Main Menu ----- #
     
@@ -2398,7 +2468,7 @@ int main()
     Texture2D campain_button = LoadTexture(PATH_CAMPAIN_BUTTON); 
     
     // Define frame rectangle for drawing.
-    Rectangle campain_button_frame = { (int) floor (SCREEN_WIDTH / 2 - campain_button.width / 2), (int) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2) + 400, campain_button.width, campain_button.height };
+    Rectangle campain_button_frame = { (float) floor (SCREEN_WIDTH / 2 - campain_button.width / 2), (float) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2) + 400, (float) campain_button.width, (float) campain_button.height };
     
     // Load the campain welcome window.
     Texture2D campain_welcome_window = LoadTexture(PATH_CAMPAIN_WELCOME);
@@ -2420,9 +2490,9 @@ int main()
     Texture2D world3_button = LoadTexture(PATH_WORLD3_BUTTON);
     
     // Define frame rectangle for drawing.
-    Rectangle world1_button_frame = { 100, 100, world1_button.width, world1_button.height };
-    Rectangle world2_button_frame = { 300, 250, world2_button.width, world2_button.height };
-    Rectangle world3_button_frame = { 500, 400, world3_button.width, world3_button.height };
+    Rectangle world1_button_frame = { 100, 100, (float) world1_button.width, (float) world1_button.height };
+    Rectangle world2_button_frame = { 300, 250, (float) world2_button.width, (float) world2_button.height };
+    Rectangle world3_button_frame = { 500, 400, (float) world3_button.width, (float) world3_button.height };
     
     // # ----- Windows ----- #
     
@@ -2436,7 +2506,7 @@ int main()
     Texture2D back_to_map_button = LoadTexture(PATH_MAP_BUTTON);
     
     // The frame of the back to map button.
-    Rectangle back_to_map_button_frame = {(int) floor(SCREEN_WIDTH / 2 - back_to_map_button.width / 2), (int) floor(SCREEN_HEIGHT / 2) + 150, back_to_map_button.width, back_to_map_button.height};
+    Rectangle back_to_map_button_frame = {(float) floor(SCREEN_WIDTH / 2 - back_to_map_button.width / 2), (float) floor(SCREEN_HEIGHT / 2) + 150, (float) back_to_map_button.width, (float) back_to_map_button.height};
     
     // True if victory/defeat.
     bool is_victory = false, is_defeat = false;
@@ -2445,7 +2515,11 @@ int main()
     Texture2D exit_welcome_window_button = LoadTexture(PATH_EXIT_WELCOME_WINDOW_BUTTON); 
     
     // Define frame rectangle for drawing.
-    Rectangle exit_welcome_window_button_frame = { (int) floor (SCREEN_WIDTH / 2 - exit_welcome_window_button.width / 2), (int) floor(SCREEN_HEIGHT / 2) + 300, exit_welcome_window_button.width, exit_welcome_window_button.height };
+    Rectangle exit_welcome_window_button_frame = { (float) floor (SCREEN_WIDTH / 2 - exit_welcome_window_button.width / 2), (float) floor(SCREEN_HEIGHT / 2) + 300, (float) exit_welcome_window_button.width, (float) exit_welcome_window_button.height };
+    
+    // Define the turbo button.
+    Texture2D turbo_button = LoadTexture(PATH_TURBO_BUTTON);
+    Rectangle turbo_button_frame = { (float) SCREEN_WIDTH - turbo_button.width - 15, (float) floor( SCREEN_HEIGHT - turbo_button.height) - 30, (float) turbo_button.width, (float) turbo_button.height };
     
     // # ----- World 1 ----- #
     
@@ -2463,7 +2537,7 @@ int main()
     // --- my fish ---
     
     Cell** world1_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world1_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world1.width / 2, world1.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world1_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
+    MyFish world1_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world1.width / 2, world1.height / 2), Size(150, 107), 15, 15, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world1_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
 
     // --- Fish Network ---
    
@@ -2656,8 +2730,8 @@ int main()
 
     // Create and set-up the camera.
     Camera2D world1_camera = { 0 };
-    world1_camera.target = (Vector2) { world1_my_fish.get_location().x, world1_my_fish.get_location().y };
-    world1_camera.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+    world1_camera.target = (Vector2) { (float) world1_my_fish.get_location().x, (float) world1_my_fish.get_location().y };
+    world1_camera.offset = (Vector2) { (float) SCREEN_WIDTH / 2, (float) SCREEN_HEIGHT / 2 };
     world1_camera.rotation = 0;
     
     if (debug_camera) { world1_camera.zoom = 0.15; }
@@ -2679,7 +2753,7 @@ int main()
     // --- my fish ---
     
     Cell** world2_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world2_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world2.width / 2, world2.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world2_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
+    MyFish world2_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world2.width / 2, world2.height / 2), Size(150, 107), 15, 15, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world2_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
 
     // --- Fish Network ---
    
@@ -2888,8 +2962,8 @@ int main()
 
     // Create and set-up the camera.
     Camera2D world2_camera = { 0 };
-    world2_camera.target = (Vector2) { world2_my_fish.get_location().x, world2_my_fish.get_location().y };
-    world2_camera.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+    world2_camera.target = (Vector2) { (float) world2_my_fish.get_location().x, (float) world2_my_fish.get_location().y };
+    world2_camera.offset = (Vector2) { (float) SCREEN_WIDTH / 2, (float) SCREEN_HEIGHT / 2 };
     world2_camera.rotation = 0;
     
     if (debug_camera) { world2_camera.zoom = 0.15; }
@@ -2911,7 +2985,7 @@ int main()
     // --- my fish ---
     
     Cell** world3_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world3_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world3.width / 2, world3.height / 2), Size(150, 107), 15, 12, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world3_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
+    MyFish world3_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world3.width / 2, world3.height / 2), Size(150, 107), 15, 15, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world3_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
 
     // --- Fish Network ---
 
@@ -3064,8 +3138,8 @@ int main()
 
     // Create and set-up the camera.
     Camera2D world3_camera = { 0 };
-    world3_camera.target = (Vector2) { world3_my_fish.get_location().x, world3_my_fish.get_location().y };
-    world3_camera.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+    world3_camera.target = (Vector2) { (float) world3_my_fish.get_location().x, (float) world3_my_fish.get_location().y };
+    world3_camera.offset = (Vector2) { (float) SCREEN_WIDTH / 2, (float) SCREEN_HEIGHT / 2 };
     world3_camera.rotation = 0;
     
     if (debug_camera) { world3_camera.zoom = 0.15; }
@@ -3075,8 +3149,8 @@ int main()
     
     // Create the camera.
     Camera2D camera_main_menu_map = { 0 };
-    camera_main_menu_map.offset = (Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
-    camera_main_menu_map.target = (Vector2) { (int) floor(world1.width / 2), (int) floor(world1.height / 2) };
+    camera_main_menu_map.offset = (Vector2) { (float) SCREEN_WIDTH / 2, (float) SCREEN_HEIGHT / 2 };
+    camera_main_menu_map.target = (Vector2) { (float) floor(world1.width / 2), (float) floor(world1.height / 2) };
     camera_main_menu_map.zoom = 0.45;
     current_world = 1;
     world = world1;
@@ -3090,7 +3164,7 @@ int main()
     PlaySound(current_music);
    
 	// ----- Game Loop -----
-	
+
 	// As long as the Esc button or exit button were not pressed, continue to the next frame.
 	while (!WindowShouldClose())
 	{
@@ -3119,7 +3193,7 @@ int main()
             if (is_campain_welcome_window)
             {
                 // Check if the user finished reading.
-                if (IsKeyPressed(KEY_SPACE)) { current_screen = "Map"; is_campain_welcome_window = false; }
+                if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) { current_screen = "Map"; is_campain_welcome_window = false; }
             }
             
             // The campain button was pressed.
@@ -3246,7 +3320,7 @@ int main()
                     world1_grid.reset();
                     
                     // Reset the camera.
-                    world1_camera.target = (Vector2) { world1_my_fish.get_location().x, world1_my_fish.get_location().y };
+                    world1_camera.target = (Vector2) { (float) world1_my_fish.get_location().x, (float) world1_my_fish.get_location().y };
                     
                     // Stop the music.
                     StopSound(current_music);
@@ -3265,7 +3339,7 @@ int main()
                     world2_grid.reset();
                     
                     // Reset the camera.
-                    world2_camera.target = (Vector2) { world2_my_fish.get_location().x, world2_my_fish.get_location().y };
+                    world2_camera.target = (Vector2) { (float) world2_my_fish.get_location().x, (float) world2_my_fish.get_location().y };
                     
                     // Stop the music.
                     StopSound(current_music);
@@ -3284,7 +3358,7 @@ int main()
                     world3_grid.reset();
                     
                     // Reset the camera.
-                    world3_camera.target = (Vector2) { world3_my_fish.get_location().x, world3_my_fish.get_location().y };
+                    world3_camera.target = (Vector2) { (float) world3_my_fish.get_location().x, (float) world3_my_fish.get_location().y };
                     
                     // Stop the music.
                     StopSound(current_music);
@@ -3343,22 +3417,202 @@ int main()
             // Update the fish network.
             fish_network.update_boundaries(-X_COORD_OFFSET, world.width + X_COORD_OFFSET, 0, world.height, true);
             
+            // True if needs to dispatch the camera due to getting close to the boundaries.
+            is_camera_dispatch_x_right = my_fish.get_location().x + ceil(camera_current_width / 2) >= world.width;
+            is_camera_dispatch_x_left = my_fish.get_location().x - ceil(camera_current_width / 2) <= 0;
+            is_camera_dispatch_x =  is_camera_dispatch_x_left || is_camera_dispatch_x_right;
+            
+            is_camera_dispatch_y_top = my_fish.get_location().y - ceil(camera_current_height / 2) <= 0;
+            is_camera_dispatch_y_bottom = my_fish.get_location().y + ceil(camera_current_height / 2) >= world.height;
+            is_camera_dispatch_y = is_camera_dispatch_y_top || is_camera_dispatch_y_bottom;
+            
             // - Turbo.
             my_fish.update_turbo();
             
             // - Stunt.
             my_fish.update_stunt();
             
-            // - User Input Management -
-
+            // --- User Input Management ---
+            
+            // - Keyboard -
+            
             // Handle the space bar.
-            if (IsKeyPressed(KEY_SPACE)) { my_fish.apply_turbo(); }
+            //if (IsKeyPressed(KEY_SPACE)) { my_fish.apply_turbo(); }
             
             // Handle arrow keys strokes. They move the fish in the world.
-            if (IsKeyDown(KEY_RIGHT)) { my_fish.move_right(); grid.refresh_entity(&my_fish); }
-            if (IsKeyDown(KEY_LEFT)) { my_fish.move_left(); grid.refresh_entity(&my_fish); }
-            if (IsKeyDown(KEY_UP)) { my_fish.move_up(); grid.refresh_entity(&my_fish); }
-            if (IsKeyDown(KEY_DOWN)) { my_fish.move_down(); grid.refresh_entity(&my_fish); }
+            if (IsKeyDown(KEY_RIGHT)) { my_fish.move_right(1); grid.refresh_entity(&my_fish); }
+            if (IsKeyDown(KEY_LEFT)) { my_fish.move_left(1); grid.refresh_entity(&my_fish); }
+            if (IsKeyDown(KEY_UP)) { my_fish.move_up(1); grid.refresh_entity(&my_fish); }
+            if (IsKeyDown(KEY_DOWN)) { my_fish.move_down(1); grid.refresh_entity(&my_fish); }
+            
+            // - Touch Screen -
+            
+            /*
+            // Get maximum of two touches.
+            first_touch_location = Location(GetTouchPosition(0).x, GetTouchPosition(0).y);
+            second_touch_location = Location(GetTouchPosition(1).x, GetTouchPosition(1).y);
+            
+            TraceLog(1, ("first touch location: " + to_string(first_touch_location.x) + ", " + to_string(first_touch_location.y)).c_str());
+            TraceLog(1, ("second touch location: " + to_string(second_touch_location.x) + ", " + to_string(second_touch_location.y)).c_str());
+            
+            // Check if there are two touches.
+            if (!(first_touch_location.x <= 0 && second_touch_location.y <= 0) && !(second_touch_location.x <= 0 && second_touch_location.y <= 0) && (second_touch_location.x != previous_second_touch_location.x || second_touch_location.y != previous_second_touch_location.y))
+            {
+                // The first touch is on the turbo button, and the second is for moving.
+                if (CheckCollisionPointRec(GetTouchPosition(0), turbo_button_frame))
+                {
+                    // Apply the turbo.
+                    my_fish.apply_turbo();
+                    
+                    // And set the second touch for moving.
+                    current_touch_location = second_touch_location;
+                }
+                
+                // The second touch is on the turbo button, and the first is for moving.
+                else if (CheckCollisionPointRec(GetTouchPosition(1), turbo_button_frame))
+                {
+                    // Apply the turbo.
+                    my_fish.apply_turbo();
+                    
+                    // And set the first touch for moving.
+                    current_touch_location = first_touch_location;
+                }
+                
+                // Both of the touches are for moving, apply the first one.
+                else { current_touch_location = first_touch_location; }
+            }
+            
+            // There was one touch or no touch at all.
+            else
+            {
+                // Raylib currently has a problem where it struggles to tell if there are no touches at all or one. This way we can tell if this is a single touch or no one touches the screen.
+                current_gesture = GetGestureDetected();
+                
+                
+                // Switch the current gesture.
+                switch (current_gesture)
+                {
+                    // Tapping gestures.
+                    case GESTURE_NONE: TraceLog(1, "NONE"); break; 
+                    case GESTURE_TAP: TraceLog(1, "TAP"); break;
+                    case GESTURE_DOUBLETAP: TraceLog(1, "DOUBLETAP"); break;
+                    
+                    // If holding or draggin, move the fish towards the touch.
+                    case GESTURE_HOLD: TraceLog(1, "HOLD"); break;
+                    case GESTURE_DRAG: TraceLog(1, "DRAG"); break;
+                    
+                    // A swipe.
+                    case GESTURE_SWIPE_RIGHT: TraceLog(1, "SWIPE_RIGHT"); break;
+                    case GESTURE_SWIPE_LEFT: TraceLog(1, "SWIPE_LEFT"); break;
+                    case GESTURE_SWIPE_UP: TraceLog(1, "SWIPE_UP"); break;
+                    case GESTURE_SWIPE_DOWN: TraceLog(1, "SWIPE_DOWN"); break;
+                    
+                    // Trying to zoom in or out.
+                    case GESTURE_PINCH_IN: TraceLog(1, "PINCH_IN"); break;
+                    case GESTURE_PINCH_OUT: TraceLog(1, "PINCH_OUT"); break;
+                    default: break;
+                }
+                
+                
+                // The user is currently touching the screen.
+                if ( current_gesture != GESTURE_NONE)
+                {
+                    // Check if this touch is on the turbo button.
+                    if (CheckCollisionPointRec(GetTouchPosition(0), turbo_button_frame))
+                    {
+                        // Apply the turbo.
+                        my_fish.apply_turbo();
+                        
+                        // Set no touch for this frame.
+                        current_touch_location = Location(0, 0);
+                    }
+                    
+                    // The first and only touch is for moving.
+                    else { current_touch_location = first_touch_location; }
+                }
+                
+                // The user is not touching the screen.
+                else { current_touch_location = Location(0, 0); }
+            }
+            */
+            
+            // Get the current gesture.
+            current_gesture = GetGestureDetected();
+            
+            current_touch_location = Location(GetTouchPosition(0).x, GetTouchPosition(0).y);
+            
+            // He is indeed trying to move the fish towards the touch.
+            if (current_gesture != GESTURE_NONE)
+            {
+                // Calculate the touch as a point in the wolrd and not on the screen.
+                destination = Location(camera.target.x - (int)floor(SCREEN_WIDTH * (1 / camera.zoom) / 2) + current_touch_location.x * (1 / camera.zoom), camera.target.y - (int)floor(SCREEN_HEIGHT * (1 / camera.zoom) / 2) + current_touch_location.y * (1 / camera.zoom));
+                
+                // Move the fish towards the destination.
+                my_fish.move_towards(destination);
+                
+                // And update the grid.
+                grid.refresh_entity(&my_fish);
+            }
+            
+            // Update the previous second touch.
+            //previous_second_touch_location.set_location(second_touch_location);
+            
+            /*
+            TraceLog(1, "First:");
+            current_gesture = GetGestureDetected();
+
+            // Switch the current gesture.
+            switch (current_gesture)
+            {
+                // Tapping gestures.
+                case GESTURE_NONE: TraceLog(1, "NONE"); break; 
+                case GESTURE_TAP: TraceLog(1, "TAP"); break;
+                case GESTURE_DOUBLETAP: TraceLog(1, "DOUBLETAP"); break;
+                
+                // If holding or draggin, move the fish towards the touch.
+                case GESTURE_HOLD: TraceLog(1, "HOLD"); break;
+                case GESTURE_DRAG: TraceLog(1, "DRAG"); break;
+                
+                // A swipe.
+                case GESTURE_SWIPE_RIGHT: TraceLog(1, "SWIPE_RIGHT"); break;
+                case GESTURE_SWIPE_LEFT: TraceLog(1, "SWIPE_LEFT"); break;
+                case GESTURE_SWIPE_UP: TraceLog(1, "SWIPE_UP"); break;
+                case GESTURE_SWIPE_DOWN: TraceLog(1, "SWIPE_DOWN"); break;
+                
+                // Trying to zoom in or out.
+                case GESTURE_PINCH_IN: TraceLog(1, "PINCH_IN"); break;
+                case GESTURE_PINCH_OUT: TraceLog(1, "PINCH_OUT"); break;
+                default: break;
+            }
+            
+            TraceLog(1, "Second:");
+            current_gesture = GetGestureDetected();
+
+            // Switch the current gesture.
+            switch (current_gesture)
+            {
+                // Tapping gestures.
+                case GESTURE_NONE: TraceLog(1, "NONE"); break; 
+                case GESTURE_TAP: TraceLog(1, "TAP"); break;
+                case GESTURE_DOUBLETAP: TraceLog(1, "DOUBLETAP"); break;
+                
+                // If holding or draggin, move the fish towards the touch.
+                case GESTURE_HOLD: TraceLog(1, "HOLD"); break;
+                case GESTURE_DRAG: TraceLog(1, "DRAG"); break;
+                
+                // A swipe.
+                case GESTURE_SWIPE_RIGHT: TraceLog(1, "SWIPE_RIGHT"); break;
+                case GESTURE_SWIPE_LEFT: TraceLog(1, "SWIPE_LEFT"); break;
+                case GESTURE_SWIPE_UP: TraceLog(1, "SWIPE_UP"); break;
+                case GESTURE_SWIPE_DOWN: TraceLog(1, "SWIPE_DOWN"); break;
+                
+                // Trying to zoom in or out.
+                case GESTURE_PINCH_IN: TraceLog(1, "PINCH_IN"); break;
+                case GESTURE_PINCH_OUT: TraceLog(1, "PINCH_OUT"); break;
+                default: break;
+            }
+            TraceLog(1, "");
+            */
             
             // --- Entities Calculations ---
             
@@ -3423,11 +3677,11 @@ int main()
             // Camera follows my fish movement.
             
             // If the fish is not close to the boundaries.
-            if (my_fish.get_location().x - ceil(camera_current_width / 2) >= 0 && my_fish.get_location().x + ceil(camera_current_width / 2) < world.width) { camera_pos_x = my_fish.get_location().x; }
-            if (my_fish.get_location().y - ceil(camera_current_height / 2) >= 0 && my_fish.get_location().y + ceil(camera_current_height / 2) < world.height) { camera_pos_y = my_fish.get_location().y; }
+            if (!is_camera_dispatch_x) { camera_pos_x = my_fish.get_location().x; }
+            if (!is_camera_dispatch_y) { camera_pos_y = my_fish.get_location().y; }
 
             // Update the camera position.
-            if (!debug_camera) { camera.target = (Vector2){ camera_pos_x, camera_pos_y }; }
+            if (!debug_camera) { camera.target = (Vector2){ (float) camera_pos_x, (float) camera_pos_y }; }
 
             // --- Prepare Gifs for drawing ---
             
@@ -3548,7 +3802,7 @@ int main()
                         {
                             for (int col_index = 0; col_index < grid.get_columns_amount(); col_index++)
                             {
-                                current_cell_entities_amount = grid_cells[row_index][col_index] -> get_entities_counter();
+                                current_cell_entities_amount = grid.get_cells()[row_index][col_index] -> get_entities_counter();
                                 if (current_cell_entities_amount > 0) { DrawRectangle(col_index * grid.get_cell_width_pixels(), row_index * grid.get_cell_height_pixels(), grid.get_cell_width_pixels(), grid.get_cell_height_pixels(), GRAY); }
                                 else { DrawRectangle(col_index * grid.get_cell_width_pixels(), row_index * grid.get_cell_height_pixels(), grid.get_cell_width_pixels(), grid.get_cell_height_pixels(), LIGHTGRAY); }
                             }
@@ -3574,7 +3828,11 @@ int main()
                 my_fish.draw_scale_widget();
                 
                 // Draw the current turbo widget.
-                my_fish.draw_turbo_widget();
+                //my_fish.draw_turbo_widget();
+                
+                // Draw the turbo button.
+                //DrawTexture(turbo_button, turbo_button_frame.x, turbo_button_frame.y, WHITE);
+                
             }
             
             // Draw on top of the world the is victory or is defeat windows.
@@ -3612,7 +3870,7 @@ int main()
     
 	// Close the game screen.
 	CloseWindow();
-    
+
     // Close the game progress file.
     game_save.quit();
 }
