@@ -2331,6 +2331,7 @@ int main()
     
     // Load game progress data.
     Save game_save = Save(path_game_progress_file);
+    game_save.update_world_checkpoint(3);
 
 	// ### --- GUI Initialization --- ###
 	
@@ -3737,6 +3738,8 @@ int main()
                 
                     // Draw the campain button.
                     DrawTexture(campain_button, campain_button_frame.x, campain_button_frame.y, WHITE);
+                    
+                    DrawText("Game: MRS games. Music: geoffharvey. Animations: Terdpong", 2, 10, 20, BLACK);
                 }               
             }
                     
