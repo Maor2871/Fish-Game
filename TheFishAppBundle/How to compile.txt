@@ -1,0 +1,15 @@
+enter the "src" folder.
+
+update the code in fish_game
+
+copy and paste the resources of the code to the resources/ directory.
+
+delete everything in android.TheFish except for lib\arm64-v8a\libc++_shared.so
+
+delete base/ base.zip output.apk res/ 
+
+execute "mingw32-make PLATFORM=PLATFORM_ANDROID" from cmd inside the src folder to create the app bundle (get the keystore data from the keystore line in the Makefile.Android file).
+
+Notes:
+	the raylib sorces are within C:\raylib_android\src.
+	adb in C:\android-sdk\platform-tools>

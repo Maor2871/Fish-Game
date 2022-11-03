@@ -1,0 +1,1 @@
+compiled_resources/drawable-ldpi_icon.png.flat compiled_resources/drawable-mdpi_icon.png.flat compiled_resources/drawable-hdpi_icon.png.flat compiled_resources/values_strings.arsc.flat
