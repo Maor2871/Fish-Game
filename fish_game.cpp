@@ -443,10 +443,10 @@ class GridEntity : public Entity
         }
         
         // The function returns the rectangular frame of the entity as a rectangle (NOT CONSIDERING ROTATION) Twice the size!
-        Rectangle get_updated_rectangular_frame_double_size()
+        Rectangle get_updated_rectangular_frame_triple_size()
         {
             // Calculate the frame considering the scale of the entity.
-            Rectangle doubled_frame = {location.x - (sqrt(scale) * size.width), location.y - (sqrt(scale) * size.height), sqrt(scale) * size.width * 2, sqrt(scale) * size.height * 2};
+            Rectangle doubled_frame = {location.x - (float) (sqrt(scale) * size.width * 1.5), location.y - (float) (sqrt(scale) * size.height * 1.5), sqrt(scale) * size.width * 3, sqrt(scale) * size.height * 3};
 
             // Return the frame as rectangle.
             return doubled_frame;
@@ -456,7 +456,7 @@ class GridEntity : public Entity
         Rectangle get_updated_rectangular_frame_lower_size()
         {
             // Calculate the frame considering the scale of the entity.
-            Rectangle doubled_frame = {location.x - ((sqrt(scale) * size.width) * 0.8 / 2), location.y - ((sqrt(scale) * size.height) * 0.8 / 2), sqrt(scale) * size.width * 0.8, sqrt(scale) * size.height * 0.8};
+            Rectangle doubled_frame = {location.x - (float) ((sqrt(scale) * size.width) * 0.8 / 2), location.y - (float) ((sqrt(scale) * size.height) * 0.8 / 2), (float) (sqrt(scale) * size.width * 0.8), (float) (sqrt(scale) * size.height * 0.8)};
 
             // Return the frame as rectangle.
             return doubled_frame;
@@ -2380,7 +2380,13 @@ int main()
     // - Graphics Paths
     const char* PATH_MAIN_MENU = "resources/Textures/Menus/Main Menu/Main Menu.png";
     const char* PATH_CAMPAIN_BUTTON = "resources/Textures/Menus/Main Menu/Campain Button.png";
-    const char* PATH_CAMPAIN_WELCOME = "resources/Textures/Menus/Main Menu/Campain Welcome.png";
+    const char* PATH_CAMPAIN_WELCOME1 = "resources/Textures/Menus/Main Menu/Campain Welcome 1.png";
+    const char* PATH_CAMPAIN_WELCOME2 = "resources/Textures/Menus/Main Menu/Campain Welcome 2.png";
+    const char* PATH_CAMPAIN_WELCOME3 = "resources/Textures/Menus/Main Menu/Campain Welcome 3.png";
+    const char* PATH_CAMPAIN_WELCOME4 = "resources/Textures/Menus/Main Menu/Campain Welcome 4.png";
+    const char* PATH_CAMPAIN_WELCOME5 = "resources/Textures/Menus/Main Menu/Campain Welcome 5.png";
+    const char* PATH_CAMPAIN_WELCOME6 = "resources/Textures/Menus/Main Menu/Campain Welcome 6.png";
+    const char* PATH_CAMPAIN_WELCOME7 = "resources/Textures/Menus/Main Menu/Campain Welcome 7.png";
     const char* PATH_MAP = "resources/Textures/Menus/Map/Map.png";
     const char* PATH_VICTORY = "resources/Textures/Menus/Windows/Victory.png";
     const char* PATH_DEFEAT = "resources/Textures/Menus/Windows/Defeat.png";
@@ -2432,14 +2438,14 @@ int main()
     const int GRID_COLS = 8;
     float EAT_GROW_RATIO = 0.5;
     const int X_COORD_OFFSET = 1000;
-    bool debug = true;
+    bool debug = false;
     bool debug_camera = false;
     
     SetTraceLogLevel(1);
     
     // Load game progress data.
     Save game_save = Save(path_game_progress_file);
-    game_save.update_world_checkpoint(3);
+    game_save.update_world_checkpoint(1);
 
 	// ### --- GUI Initialization --- ###
 	
@@ -2580,10 +2586,19 @@ int main()
     Rectangle campain_button_frame = { (float) floor (SCREEN_WIDTH / 2 - campain_button.width / 2), (float) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2) + 400, (float) campain_button.width, (float) campain_button.height };
     
     // Load the campain welcome window.
-    Texture2D campain_welcome_window = LoadTexture(PATH_CAMPAIN_WELCOME);
+    Texture2D campain_welcome_window1 = LoadTexture(PATH_CAMPAIN_WELCOME1);
+    Texture2D campain_welcome_window2 = LoadTexture(PATH_CAMPAIN_WELCOME2);
+    Texture2D campain_welcome_window3 = LoadTexture(PATH_CAMPAIN_WELCOME3);
+    Texture2D campain_welcome_window4 = LoadTexture(PATH_CAMPAIN_WELCOME4);
+    Texture2D campain_welcome_window5 = LoadTexture(PATH_CAMPAIN_WELCOME5);
+    Texture2D campain_welcome_window6 = LoadTexture(PATH_CAMPAIN_WELCOME6);
+    Texture2D campain_welcome_window7 = LoadTexture(PATH_CAMPAIN_WELCOME7);
     
     // If true, show the campain welcome window.
     bool is_campain_welcome_window = false;
+    
+    // The current campain window.
+    int current_campain_welcome_window = 1;
     
     // The current mouse point location.
     Vector2 mouse_point = { 0, 0 };
@@ -2844,7 +2859,7 @@ int main()
     
     fish_profile world1_fish_profiles_on_startup[] = {};
     fish_profile world1_available_fish[] = {world1_fish1, world1_fish2, world1_fish3, world1_fish4, world1_fish5, world1_fish6, world1_fish7, world1_fish8, world1_fish9, world1_fish10, world1_fish11};
-    FishNetwork world1_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, world1_fish_profiles_on_startup, 0, world1_available_fish, 11, X_COORD_OFFSET, world1_my_fish.get_updated_rectangular_frame_double_size());
+    FishNetwork world1_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, world1_fish_profiles_on_startup, 0, world1_available_fish, 11, X_COORD_OFFSET, world1_my_fish.get_updated_rectangular_frame_triple_size());
     world1_fish_network.update_boundaries(-X_COORD_OFFSET, world1.width + X_COORD_OFFSET, 0, world1.height, true);
 
     // ----- Final Set-ups World1 -----
@@ -3089,7 +3104,7 @@ int main()
     
     fish_profile world2_fish_profiles_on_startup[] = {};
     fish_profile world2_available_fish[] = {world2_fish1, world2_fish2, world2_fish3, world2_fish4, world2_fish5, world2_fish6, world2_fish7, world2_fish8, world2_fish9, world2_fish10, world2_fish11, world2_crab1};
-    FishNetwork world2_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world2_grid, world2_fish_profiles_on_startup, 0, world2_available_fish, 12, X_COORD_OFFSET, world2_my_fish.get_updated_rectangular_frame_double_size());
+    FishNetwork world2_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world2_grid, world2_fish_profiles_on_startup, 0, world2_available_fish, 12, X_COORD_OFFSET, world2_my_fish.get_updated_rectangular_frame_triple_size());
     world2_fish_network.update_boundaries(-X_COORD_OFFSET, world2.width + X_COORD_OFFSET, 0, world2.height, true);
 
     // ----- Final Set-ups World2 -----
@@ -3274,7 +3289,7 @@ int main()
     
     fish_profile world3_fish_profiles_on_startup[] = {};
     fish_profile world3_available_fish[] = {world3_fish4, world3_fish6, world3_fish8, world3_fish10, world3_crab1, world3_crab2, world3_jeflly_fish1, world3_jeflly_fish2};
-    FishNetwork world3_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world3_grid, world3_fish_profiles_on_startup, 0, world3_available_fish, 8, X_COORD_OFFSET, world3_my_fish.get_updated_rectangular_frame_double_size());
+    FishNetwork world3_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world3_grid, world3_fish_profiles_on_startup, 0, world3_available_fish, 8, X_COORD_OFFSET, world3_my_fish.get_updated_rectangular_frame_triple_size());
     world3_fish_network.update_boundaries(-X_COORD_OFFSET, world3.width + X_COORD_OFFSET, 0, world3.height, true);
 
     // ----- Final Set-ups World3 -----
@@ -3336,7 +3351,14 @@ int main()
             if (is_campain_welcome_window)
             {
                 // Check if the user finished reading.
-                if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) { current_screen = "Map"; is_campain_welcome_window = false; }
+                if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) 
+                {
+                    // This is the last window, move to the map.
+                    if (current_campain_welcome_window >= 7) { current_screen = "Map"; is_campain_welcome_window = false; current_campain_welcome_window = 1; }
+                    
+                    // Move to the next window.
+                    else { current_campain_welcome_window++; }
+                }
             }
             
             // The campain button was pressed.
@@ -3871,7 +3893,33 @@ int main()
             if (current_screen == "Main Menu")
             {
                 // If we are on the campain welcome window.
-                if (is_campain_welcome_window) { DrawTexture(campain_welcome_window, (int) floor (SCREEN_WIDTH / 2 - campain_welcome_window.width / 2), (int) floor(SCREEN_HEIGHT / 2 - campain_welcome_window.height / 2), WHITE); }
+                if (is_campain_welcome_window) 
+                {
+                    switch (current_campain_welcome_window)
+                    {
+                        case 1:
+                            DrawTexture(campain_welcome_window1, (int) floor (SCREEN_WIDTH / 2 - campain_welcome_window1.width / 2), (int) floor(SCREEN_HEIGHT / 2 - campain_welcome_window1.height / 2), WHITE);
+                            break;
+                        case 2:
+                            DrawTexture(campain_welcome_window2, (int) floor (SCREEN_WIDTH / 2 - campain_welcome_window2.width / 2), (int) floor(SCREEN_HEIGHT / 2 - campain_welcome_window2.height / 2), WHITE);
+                            break;
+                        case 3:
+                            DrawTexture(campain_welcome_window3, (int) floor (SCREEN_WIDTH / 2 - campain_welcome_window3.width / 2), (int) floor(SCREEN_HEIGHT / 2 - campain_welcome_window3.height / 2), WHITE);
+                            break;
+                        case 4:
+                            DrawTexture(campain_welcome_window4, (int) floor (SCREEN_WIDTH / 2 - campain_welcome_window4.width / 2), (int) floor(SCREEN_HEIGHT / 2 - campain_welcome_window4.height / 2), WHITE);
+                            break;
+                        case 5:
+                            DrawTexture(campain_welcome_window5, (int) floor (SCREEN_WIDTH / 2 - campain_welcome_window5.width / 2), (int) floor(SCREEN_HEIGHT / 2 - campain_welcome_window5.height / 2), WHITE);
+                            break;
+                        case 6:
+                            DrawTexture(campain_welcome_window6, (int) floor (SCREEN_WIDTH / 2 - campain_welcome_window6.width / 2), (int) floor(SCREEN_HEIGHT / 2 - campain_welcome_window6.height / 2), WHITE);
+                            break;
+                        case 7:
+                            DrawTexture(campain_welcome_window7, (int) floor (SCREEN_WIDTH / 2 - campain_welcome_window7.width / 2), (int) floor(SCREEN_HEIGHT / 2 - campain_welcome_window7.height / 2), WHITE);
+                            break;
+                    }
+                }
                 
                 // Draw the main menu.
                 else
