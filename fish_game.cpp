@@ -148,6 +148,14 @@ class Entity
 
 // ----- Structues -----
 
+// An entity frame.
+struct frame
+{
+    int x_offset;
+    int y_offset;
+    int width;
+    int height;
+};
 
 // A description of a path.
 struct fish_path
@@ -192,6 +200,7 @@ struct fish_profile
     Image fish_image;
     int* fish_image_frames_amount;
     string fish_type;
+    frame collision_frame;
     bool is_sting_proof;
     bool is_facing_left_on_startup;
     Size size;
@@ -347,6 +356,11 @@ class GridEntity : public Entity
         // Important: The frame rectangle considers 0 rotation!
         Rectangle rectangular_frame;
         
+        // The frame properties for collision detection. 
+        // Important: the properites relates to the original dimensions of the gif file itself, not to the received size.
+        // Therfore, it is very important to call set_original_size() when the texture is initialized.
+        frame collision_frame;
+        
         // The maximum amount of cells the entity can be contained in. Note that if scale has no limit, might be inside all the cells of the grid.
         int max_cells_within;
         
@@ -365,10 +379,13 @@ class GridEntity : public Entity
     public:
 
         // Constructor.
-        GridEntity(string new_entity_type, Location new_location, Size new_size, float new_scale, float new_max_scale, int new_rotation, int new_max_cells_within, Cell** new_cells_within) : Entity(new_location, new_size, new_scale, new_max_scale, new_rotation)
+        GridEntity(string new_entity_type, frame new_collision_frame, Location new_location, Size new_size, float new_scale, float new_max_scale, int new_rotation, int new_max_cells_within, Cell** new_cells_within) : Entity(new_location, new_size, new_scale, new_max_scale, new_rotation)
         {
+            // The collision frame properties.
+            collision_frame = new_collision_frame;
+            
             // Save the maximum amount of cells might be within.
-            max_cells_within = new_max_cells_within; 
+            max_cells_within = new_max_cells_within;
             
             // Create the cells array. Its length is exactly max_cells_within.
             cells_within = new_cells_within;
@@ -388,6 +405,16 @@ class GridEntity : public Entity
             current_amount_of_cells_within = 0;
             entity_type = "entity";
         }
+        
+        // The function receives the size of the texture and updates the collision frame size.
+        void set_original_size(Size original_size)
+        {
+            collision_frame.width = (int) (collision_frame.width * ((float) size.width / original_size.width));
+            collision_frame.x_offset = (int) (collision_frame.x_offset * ((float) size.width / original_size.width));
+            
+            collision_frame.height = (int) (collision_frame.height * ((float) size.height / original_size.height));
+            collision_frame.y_offset = (int) (collision_frame.y_offset * ((float) size.height / original_size.height));
+        }
 
         // The function returns the rectangular frame of the entity as a rectangle (NOT CONSIDERING ROTATION).
         Rectangle get_updated_rectangular_frame()
@@ -398,10 +425,46 @@ class GridEntity : public Entity
             // Return the frame as rectangle.
             return rectangular_frame;
         }
+        
+        // The function returns the collision frame rectangle.
+        Rectangle get_updated_collision_frame()
+        {
+            // Calculate the collision frame rectangle.
+            Rectangle collision_frame_rectangle = {location.x + (sqrt(scale) * collision_frame.x_offset) - ((sqrt(scale) * collision_frame.width) / 2), location.y + (sqrt(scale) * collision_frame.y_offset) - ((sqrt(scale) * collision_frame.height) / 2), sqrt(scale) * collision_frame.width, sqrt(scale) * collision_frame.height};
+            
+            // Return the rectangle.
+            return collision_frame_rectangle;
+        }
+        
+        // The function mirrors the collision frame on the y axis.
+        void flip_collision_frame_horizontal()
+        {
+            collision_frame.x_offset *= -1;
+        }
+        
+        // The function returns the rectangular frame of the entity as a rectangle (NOT CONSIDERING ROTATION) Twice the size!
+        Rectangle get_updated_rectangular_frame_double_size()
+        {
+            // Calculate the frame considering the scale of the entity.
+            Rectangle doubled_frame = {location.x - (sqrt(scale) * size.width), location.y - (sqrt(scale) * size.height), sqrt(scale) * size.width * 2, sqrt(scale) * size.height * 2};
+
+            // Return the frame as rectangle.
+            return doubled_frame;
+        }
+
+        // The function returns the rectangular frame of the entity as a rectangle (NOT CONSIDERING ROTATION) 0.8 the size!
+        Rectangle get_updated_rectangular_frame_lower_size()
+        {
+            // Calculate the frame considering the scale of the entity.
+            Rectangle doubled_frame = {location.x - ((sqrt(scale) * size.width) * 0.8 / 2), location.y - ((sqrt(scale) * size.height) * 0.8 / 2), sqrt(scale) * size.width * 0.8, sqrt(scale) * size.height * 0.8};
+
+            // Return the frame as rectangle.
+            return doubled_frame;
+        }
 
         // The function returns the array of cells that the entity is currently within.
         Cell** get_cells_within() { return cells_within; }
-        
+
         // The function returns the amount of cells curretnly within.
         int get_amount_of_cells_within() { return current_amount_of_cells_within; }
         
@@ -735,7 +798,7 @@ class MyGif: public GridEntity
     public:
     
         // Constructor.
-        MyGif(Image new_my_gif_image, int* new_frames_amount, string new_entity_type, Location new_location, Size new_size, float new_scale, float new_max_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : GridEntity(new_entity_type, new_location, new_size, new_scale, new_max_scale, new_rotation, new_max_cells_within, new_cells_within)
+        MyGif(Image new_my_gif_image, int* new_frames_amount, frame new_collision_frame, string new_entity_type, Location new_location, Size new_size, float new_scale, float new_max_scale, int new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within) : GridEntity(new_entity_type, new_collision_frame, new_location, new_size, new_scale, new_max_scale, new_rotation, new_max_cells_within, new_cells_within)
         {
             // Save the image of the gif.
             my_gif_image = new_my_gif_image;
@@ -756,12 +819,15 @@ class MyGif: public GridEntity
             // Create the texture instance.
             my_gif_texture = LoadTextureFromImage(my_gif_image);
             
+            // Set the collision frame to match the current size.
+            set_original_size(Size(my_gif_texture.width, my_gif_texture.height));
+            
             // Set the tint to white.
             tint = WHITE;
         }
         
         // Default Constructor.
-        MyGif() : GridEntity("", Location(), Size(), 1, 1, 0, 1, new Cell*[0])
+        MyGif() : GridEntity()
         {
             is_facing_left_on_startup = false;
             is_flip_horizontal = false;
@@ -861,6 +927,9 @@ class Fish : public MyGif
         // Indicating if the fish is out of bounds.
         bool is_fish_out_of_bounds;
         
+        // Indicates on the moving direction of the fish on the x axis.
+        bool is_moving_right;
+        
         // Indicating that the fish was eaten.
         bool is_eaten;
         
@@ -893,7 +962,7 @@ class Fish : public MyGif
     public:
         
         // Counstructor.
-        Fish(int new_fps, Image new_my_fish_image, int* new_frames_amount, string new_fish_type, bool new_is_sting_proof, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within, Sound new_sound_eat, Sound new_sound_sting) : MyGif(new_my_fish_image, new_frames_amount, "Fish", new_location, new_size, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
+        Fish(int new_fps, Image new_my_fish_image, int* new_frames_amount, frame new_collision_frame, string new_fish_type, bool new_is_sting_proof, Location new_location, Size new_size, float new_speed_x, float new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within, Sound new_sound_eat, Sound new_sound_sting) : MyGif(new_my_fish_image, new_frames_amount, new_collision_frame, "Fish", new_location, new_size, new_scale, new_max_scale, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within)
         {
             // How many frames are there per second.
             fps = new_fps;
@@ -913,6 +982,9 @@ class Fish : public MyGif
             
             // Set false in initialization. Update accurate value on the first move call.
             is_fish_out_of_bounds = false;
+            
+            // Set the moving direction.
+            is_moving_right = (is_facing_left_on_startup) ? false: true;
             
             // The fish is not eaten on startup.
             is_eaten = false;
@@ -955,12 +1027,18 @@ class Fish : public MyGif
         {
             if (location.x - (int)(ratio * speed_x) < left_boundary) { location.x = left_boundary; boundary_exceed(); is_fish_out_of_bounds = true; }
             else { location.x -= (int)floor(ratio * speed_x + 0.5); flip_horizontal(); }
+            
+            if (is_moving_right) { flip_collision_frame_horizontal(); }
+            is_moving_right = false;
         }
         
         void move_right(float ratio) 
         {
             if (location.x + (int) (ratio * speed_x) > right_boundary) { location.x = right_boundary; boundary_exceed(); is_fish_out_of_bounds = true;}
             else { location.x += (int)floor(ratio * speed_x + 0.5); unflip_horizontal(); }
+            
+            if (!is_moving_right) { flip_collision_frame_horizontal(); }
+            is_moving_right = true;
         }
         
         void move_up(float ratio) 
@@ -976,7 +1054,7 @@ class Fish : public MyGif
         }
         
         // The function causes the fish a jelly fish stunt.
-        void jelly_fish_stunt(float stunt_power)
+        virtual void jelly_fish_stunt(float stunt_power)
         {
             // Sting proof.
             if (is_sting_proof) { return; }
@@ -1219,7 +1297,7 @@ class MyFish : public Fish
     public:
     
         // Constructor.
-        MyFish(int new_fps, Image new_my_fish_image, int* new_frames_amount, bool new_is_sting_proof, Location new_location, Size new_size, int new_speed_x, int new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_required_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within, Location new_scale_widget_location, Size new_scale_sidget_size, int new_scale_widget_stroke, float new_turbo, int new_turbo_duration_frames, int new_turbo_reload_frames, Location new_turbo_widget_location, Size new_turbo_widget_size, int new_turbo_widget_stroke, Sound new_sound_eat, Sound new_sound_sting) : Fish(new_fps, new_my_fish_image, new_frames_amount, "my fish", new_is_sting_proof, new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_required_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within, new_sound_eat, new_sound_sting)
+        MyFish(int new_fps, Image new_my_fish_image, int* new_frames_amount, frame new_collision_frame, bool new_is_sting_proof, Location new_location, Size new_size, int new_speed_x, int new_speed_y, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_required_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_max_cells_within, Cell** new_cells_within, Location new_scale_widget_location, Size new_scale_sidget_size, int new_scale_widget_stroke, float new_turbo, int new_turbo_duration_frames, int new_turbo_reload_frames, Location new_turbo_widget_location, Size new_turbo_widget_size, int new_turbo_widget_stroke, Sound new_sound_eat, Sound new_sound_sting) : Fish(new_fps, new_my_fish_image, new_frames_amount, new_collision_frame, "my fish", new_is_sting_proof, new_location, new_size, new_speed_x, new_speed_y, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_required_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within, new_sound_eat, new_sound_sting)
         {
             // Initialize my fish properties.
             fps = new_fps;
@@ -1326,6 +1404,31 @@ class MyFish : public Fish
             else { move_down(min((float)1, (float)(new_y - location.y) / speed_x)); }
         }
         
+        // The function causes the fish a jelly fish stunt.
+        void jelly_fish_stunt(float stunt_power) override
+        {
+            // Sting proof.
+            if (is_sting_proof) { return; }
+            
+            // Currently in a stunt, can't be stunt again.
+            if (current_stunt_frames_left > 0) { return; }
+            
+            // Play sting sound.
+            PlaySound(sound_sting);
+            
+            // Stunt.
+            current_stunt_frames_left = (int) floor(stunt_power * fps);
+            
+            // Calculate how much scale decreases each frame.
+            stunt_size_decrease_per_frame = max((float) 1, ((required_scale - scale) / 8) * stunt_power) / current_stunt_frames_left;            
+            
+            // Save the current speed and stunt.
+            original_speed_x = speed_x;
+            original_speed_y = speed_y;
+            speed_x = 0;
+            speed_y = 0;
+        }
+        
         // Returns true if my fish has reached its required scale.
         bool is_victory() { return scale >= required_scale; }
         
@@ -1424,7 +1527,7 @@ class WanderFish : public Fish
         // Constructor.
         // new_paths_count_in_paths_stack should state the number of stacks which are saved in the received paths_stack.
         // The location is relevant if there is no paths_stack or is_initial_location is false;
-        WanderFish(int new_fps, Image new_wander_fish_image, int* new_frames_amount, string new_fish_type, bool new_is_sting_proof, Location new_location, bool is_initial_left_location, bool is_randomize_x_coord, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, bool is_randomize_initial_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_x_offset, int new_max_cells_within, Cell** new_cells_within, Sound new_sound_eat, Sound new_sound_sting, Rectangle new_exclude_setup_location_frame) : Fish(new_fps, new_wander_fish_image, new_frames_amount, new_fish_type, new_is_sting_proof, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within, new_sound_eat, new_sound_sting)
+        WanderFish(int new_fps, Image new_wander_fish_image, int* new_frames_amount, frame new_collision_frame, string new_fish_type, bool new_is_sting_proof, Location new_location, bool is_initial_left_location, bool is_randomize_x_coord, Size new_size, float new_min_speed_x, float new_max_speed_x, float new_min_speed_y, float new_max_speed_y, int new_min_path_frames, int new_max_path_frames, paths_stack new_paths_stack, int new_left_boundary, int new_right_boundary, int new_top_boundary, int new_bottom_boundary, float new_scale, float new_max_scale, bool is_randomize_initial_scale, float new_eat_grow_ratio, float new_can_eat_ratio, float new_cant_eat_ratio, float new_rotation, bool new_is_facing_left_on_startup, int new_x_offset, int new_max_cells_within, Cell** new_cells_within, Sound new_sound_eat, Sound new_sound_sting, Rectangle new_exclude_setup_location_frame) : Fish(new_fps, new_wander_fish_image, new_frames_amount, new_collision_frame, new_fish_type, new_is_sting_proof, new_location, new_size, 0, 0, new_left_boundary, new_right_boundary, new_top_boundary, new_bottom_boundary, new_scale, new_max_scale, new_eat_grow_ratio, new_can_eat_ratio, new_cant_eat_ratio, new_rotation, new_is_facing_left_on_startup, new_max_cells_within, new_cells_within, new_sound_eat, new_sound_sting)
         {
             // Set the range of speeds on both axes.
             min_speed_x = new_min_speed_x;
@@ -1498,6 +1601,9 @@ class WanderFish : public Fish
             int x_coordinates = 0;
             Vector2 position = {0, 0};
             
+            // The current frame rectangle with the current position.
+            Rectangle current_frame;
+            
             // Make sure not in the exclude frame.
             do
             {
@@ -1510,8 +1616,6 @@ class WanderFish : public Fish
                     if (bottom_boundary - top_boundary <= 0) { y_coordinates = top_boundary + size.height; }
                     else { y_coordinates = rand() % (bottom_boundary - top_boundary) + top_boundary; }
                 }
-
-                
                 
                 // If random x coord is required.
                 if (is_randomize_x_coord)
@@ -1534,10 +1638,14 @@ class WanderFish : public Fish
                     else { x_coordinates = right_boundary - x_coord_offset; }
                 }
                 
+                // The generated location.
                 position.x = x_coordinates;
                 position.y = y_coordinates;
+                
+                // The frame of the fish if it would be set with the current location.
+                current_frame = {position.x - ((sqrt(scale) * size.width) / 2), position.y - ((sqrt(scale) * size.height) / 2), sqrt(scale) * size.width, sqrt(scale) * size.height};
             }
-            while (CheckCollisionPointRec(position, exclude_frame));
+            while (CheckCollisionRecs(current_frame, exclude_frame));
 
             // Set the initial location.
             location.set_location(Location(x_coordinates, y_coordinates));
@@ -1921,7 +2029,7 @@ class FishNetwork
             Cell** cells_within = new Cell*[grid -> get_rows_amount() * grid -> get_columns_amount()];
             
             // Create the fish.
-            WanderFish* fish_to_load = new WanderFish(fps, current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.fish_type, current_fish_profile.is_sting_proof, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, is_on_setup, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], - x_coord_offset, grid -> get_width_pixels() + x_coord_offset, 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, current_fish_profile.is_randomize_initial_scale, eat_grow_ratio, current_fish_profile.can_eat_ratio, current_fish_profile.cant_eat_ratio, 0, current_fish_profile.is_facing_left_on_startup, x_coord_offset, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within, current_fish_profile.sound_eat, current_fish_profile.sound_sting, exclude_setup_location_frame);
+            WanderFish* fish_to_load = new WanderFish(fps, current_fish_profile.fish_image, current_fish_profile.fish_image_frames_amount, current_fish_profile.collision_frame, current_fish_profile.fish_type, current_fish_profile.is_sting_proof, current_fish_profile.paths_stacks[random_paths_stack_index].initial_location, current_fish_profile.paths_stacks[random_paths_stack_index].is_left, is_on_setup, current_fish_profile.size, current_fish_profile.min_speed_x, current_fish_profile.max_speed_x, current_fish_profile.min_speed_y, current_fish_profile.max_speed_y, current_fish_profile.min_frames_per_path, current_fish_profile.max_frames_per_path, current_fish_profile.paths_stacks[random_paths_stack_index], - x_coord_offset, grid -> get_width_pixels() + x_coord_offset, 0 + current_fish_profile.size.height, grid -> get_height_pixels() - current_fish_profile.size.height, 1, current_fish_profile.max_scaling, current_fish_profile.is_randomize_initial_scale, eat_grow_ratio, current_fish_profile.can_eat_ratio, current_fish_profile.cant_eat_ratio, 0, current_fish_profile.is_facing_left_on_startup, x_coord_offset, grid -> get_rows_amount() * grid -> get_columns_amount(), cells_within, current_fish_profile.sound_eat, current_fish_profile.sound_sting, exclude_setup_location_frame);
 
             // Save the fish in the fish array.
             fish[current_fish_amount] = fish_to_load;
@@ -1937,7 +2045,7 @@ class FishNetwork
             // Iterate over all the fish in the network.
             for (int i = 0; i < current_fish_amount; i++)
             {
-                Rectangle frame = fish[i] -> get_updated_rectangular_frame();
+                Rectangle frame = fish[i] -> get_updated_collision_frame();
                 DrawRectangle(frame.x,frame.y, frame.width, frame.height, RED);
             }
         }
@@ -2277,7 +2385,7 @@ int main()
     const char* PATH_VICTORY = "resources/Textures/Menus/Windows/Victory.png";
     const char* PATH_DEFEAT = "resources/Textures/Menus/Windows/Defeat.png";
     const char* PATH_MAP_BUTTON = "resources/Textures/Menus/Windows/Map Button.png";
-    const char* PATH_TURBO_BUTTON = "resources/Textures/Worlds/Turbo Button.png";
+    //const char* PATH_TURBO_BUTTON = "resources/Textures/Worlds/Turbo Button.png";
     const char* PATH_WORLD1_BUTTON = "resources/Textures/Menus/Map/World 1 Button.png";
     const char* PATH_WORLD2_BUTTON = "resources/Textures/Menus/Map/World 2 Button.png";
     const char* PATH_WORLD3_BUTTON = "resources/Textures/Menus/Map/World 3 Button.png";
@@ -2324,7 +2432,7 @@ int main()
     const int GRID_COLS = 8;
     float EAT_GROW_RATIO = 0.5;
     const int X_COORD_OFFSET = 1000;
-    bool debug = false;
+    bool debug = true;
     bool debug_camera = false;
     
     SetTraceLogLevel(1);
@@ -2519,8 +2627,8 @@ int main()
     Rectangle exit_welcome_window_button_frame = { (float) floor (SCREEN_WIDTH / 2 - exit_welcome_window_button.width / 2), (float) floor(SCREEN_HEIGHT / 2) + 300, (float) exit_welcome_window_button.width, (float) exit_welcome_window_button.height };
     
     // Define the turbo button.
-    Texture2D turbo_button = LoadTexture(PATH_TURBO_BUTTON);
-    Rectangle turbo_button_frame = { (float) SCREEN_WIDTH - turbo_button.width - 15, (float) floor( SCREEN_HEIGHT - turbo_button.height) - 30, (float) turbo_button.width, (float) turbo_button.height };
+    //Texture2D turbo_button = LoadTexture(PATH_TURBO_BUTTON);
+    //Rectangle turbo_button_frame = { (float) SCREEN_WIDTH - turbo_button.width - 15, (float) floor( SCREEN_HEIGHT - turbo_button.height) - 30, (float) turbo_button.width, (float) turbo_button.height };
     
     // # ----- World 1 ----- #
     
@@ -2538,7 +2646,8 @@ int main()
     // --- my fish ---
     
     Cell** world1_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world1_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world1.width / 2, world1.height / 2), Size(150, 107), 15, 15, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world1_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
+    frame world1_my_fish_collision_frame = {-54, -4, 549, 439};
+    MyFish world1_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, world1_my_fish_collision_frame, false, Location(world1.width / 2, world1.height / 2), Size(150, 107), 23, 23, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world1_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
 
     // --- Fish Network ---
    
@@ -2558,7 +2667,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish1_paths_stacks[] = {world1_fish1_paths_stack_wander_right, world1_fish1_paths_stack_wander_left};
-    fish_profile world1_fish1 = {images.fish1_image, &images.fish1_image_frames_amount, "fish 1", false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
+    frame world1_fish1_collision_frame = {0, 0, 641, 362};
+    fish_profile world1_fish1 = {images.fish1_image, &images.fish1_image_frames_amount, "fish 1", world1_fish1_collision_frame, false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // - Fish 2 -
     
@@ -2574,7 +2684,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish2_paths_stacks[] = {world1_fish2_paths_stack_wander_right, world1_fish2_paths_stack_wander_left};
-    fish_profile world1_fish2 = {images.fish2_image, &images.fish2_image_frames_amount, "fish 2", false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.6};
+    frame world1_fish2_collision_frame = {0, 17, 640, 404};
+    fish_profile world1_fish2 = {images.fish2_image, &images.fish2_image_frames_amount, "fish 2", world1_fish2_collision_frame, false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.6};
     
     // - Fish 3 -
     
@@ -2590,7 +2701,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish3_paths_stacks[] = {world1_fish3_paths_stack_wander_right, world1_fish3_paths_stack_wander_left};
-    fish_profile world1_fish3 = {images.fish3_image, &images.fish3_image_frames_amount, "fish 3", false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish3_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
+    frame world1_fish3_collision_frame = {-62, 16, 516, 430};
+    fish_profile world1_fish3 = {images.fish3_image, &images.fish3_image_frames_amount, "fish 3", world1_fish3_collision_frame, false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish3_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // - Fish 4 -
     
@@ -2606,7 +2718,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish4_paths_stacks[] = {world1_fish4_paths_stack_wander_right, world1_fish4_paths_stack_wander_left};
-    fish_profile world1_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.5};
+    frame world1_fish4_collision_frame = {0, 0, 616, 686};
+    fish_profile world1_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", world1_fish4_collision_frame, true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.5};
     
     // - Fish 5 -
     
@@ -2622,7 +2735,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish5_paths_stacks[] = {world1_fish5_paths_stack_wander_right, world1_fish5_paths_stack_wander_left};
-    fish_profile world1_fish5 = {images.fish5_image, &images.fish5_image_frames_amount, "fish 5", false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish5_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.1};
+    frame world1_fish5_collision_frame = {-49, 4, 542, 356};
+    fish_profile world1_fish5 = {images.fish5_image, &images.fish5_image_frames_amount, "fish 5", world1_fish5_collision_frame, false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish5_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.1};
     
     // - Fish 6 -
     
@@ -2638,7 +2752,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish6_paths_stacks[] = {world1_fish6_paths_stack_wander_right, world1_fish6_paths_stack_wander_left};
-    fish_profile world1_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.1};
+    frame world1_fish6_collision_frame = {22, -4, 467, 431};
+    fish_profile world1_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", world1_fish6_collision_frame, true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.1};
     
     // - Fish 7 -
     
@@ -2654,7 +2769,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish7_paths_stacks[] = {world1_fish7_paths_stack_wander_right, world1_fish7_paths_stack_wander_left};
-    fish_profile world1_fish7 = {images.fish7_image, &images.fish7_image_frames_amount, "fish 7", false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish7_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.1};
+    frame world1_fish7_collision_frame = {-43, -20, 546, 375};
+    fish_profile world1_fish7 = {images.fish7_image, &images.fish7_image_frames_amount, "fish 7", world1_fish7_collision_frame, false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish7_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.1};
     
     // - Fish 8 -
     
@@ -2670,7 +2786,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish8_paths_stacks[] = {world1_fish8_paths_stack_wander_right, world1_fish8_paths_stack_wander_left};
-    fish_profile world1_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.5};
+    frame world1_fish8_collision_frame = {0, 0, 640, 576};
+    fish_profile world1_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", world1_fish8_collision_frame, true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world1_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.5};
     
     // - Fish 9 -
     
@@ -2686,7 +2803,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish9_paths_stacks[] = {world1_fish9_paths_stack_wander_right, world1_fish9_paths_stack_wander_left};
-    fish_profile world1_fish9 = {images.fish9_image, &images.fish9_image_frames_amount, "fish 9", false, true, Size(150, 123), 3, 6, 13, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish9_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.2};
+    frame world1_fish9_collision_frame = {0, 0, 658, 540};
+    fish_profile world1_fish9 = {images.fish9_image, &images.fish9_image_frames_amount, "fish 9", world1_fish9_collision_frame, false, true, Size(150, 123), 3, 6, 13, 0, 2, 30, 300, 1.2, 2, true, 2, world1_fish9_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.2};
     
     // - Fish 10 -
     
@@ -2702,7 +2820,8 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish10_paths_stacks[] = {world1_fish10_paths_stack_wander_right, world1_fish10_paths_stack_wander_left};
-    fish_profile world1_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", true, false, Size(300, 287), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.05};
+    frame world1_fish10_collision_frame = {16, 13, 396, 375};
+    fish_profile world1_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", world1_fish10_collision_frame, true, false, Size(300, 287), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.05};
     
     // - Fish 11 -
     
@@ -2718,13 +2837,14 @@ int main()
     
     // Fish profile.
     paths_stack world1_fish11_paths_stacks[] = {world1_fish11_paths_stack_wander_right, world1_fish11_paths_stack_wander_left};
-    fish_profile world1_fish11 = {images.fish11_image, &images.fish11_image_frames_amount, "fish 11", false, true, Size(300, 255), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish11_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.05};
+    frame world1_fish11_collision_frame = {-56, 59, 413, 341};
+    fish_profile world1_fish11 = {images.fish11_image, &images.fish11_image_frames_amount, "fish 11", world1_fish11_collision_frame, false, true, Size(300, 255), 2, 1, 6, 0, 2, 30, 300, 1.2, 2, false, 2, world1_fish11_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.05};
     
     // -- Setup --
     
     fish_profile world1_fish_profiles_on_startup[] = {};
     fish_profile world1_available_fish[] = {world1_fish1, world1_fish2, world1_fish3, world1_fish4, world1_fish5, world1_fish6, world1_fish7, world1_fish8, world1_fish9, world1_fish10, world1_fish11};
-    FishNetwork world1_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, world1_fish_profiles_on_startup, 0, world1_available_fish, 11, X_COORD_OFFSET, world1_my_fish.get_updated_rectangular_frame());
+    FishNetwork world1_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world1_grid, world1_fish_profiles_on_startup, 0, world1_available_fish, 11, X_COORD_OFFSET, world1_my_fish.get_updated_rectangular_frame_double_size());
     world1_fish_network.update_boundaries(-X_COORD_OFFSET, world1.width + X_COORD_OFFSET, 0, world1.height, true);
 
     // ----- Final Set-ups World1 -----
@@ -2754,7 +2874,8 @@ int main()
     // --- my fish ---
     
     Cell** world2_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world2_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world2.width / 2, world2.height / 2), Size(150, 107), 15, 15, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world2_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
+    frame world2_my_fish_collision_frame = {-54, -4, 549, 439};
+    MyFish world2_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, world2_my_fish_collision_frame, false, Location(world2.width / 2, world2.height / 2), Size(150, 107), 23, 23, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world2_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
 
     // --- Fish Network ---
    
@@ -2774,7 +2895,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish1_paths_stacks[] = {world2_fish1_paths_stack_wander_right, world2_fish1_paths_stack_wander_left};
-    fish_profile world2_fish1 = {images.fish1_image, &images.fish1_image_frames_amount, "fish 1", false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
+    frame world2_fish1_collision_frame = {0, 0, 641, 362};
+    fish_profile world2_fish1 = {images.fish1_image, &images.fish1_image_frames_amount, "fish 1", world2_fish1_collision_frame, false, true, Size(130, 73), 1.5, 4, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 2 -
     
@@ -2790,7 +2912,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish2_paths_stacks[] = {world2_fish2_paths_stack_wander_right, world2_fish2_paths_stack_wander_left};
-    fish_profile world2_fish2 = {images.fish2_image, &images.fish2_image_frames_amount, "fish 2", false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
+    frame world2_fish2_collision_frame = {0, 17, 640, 404};
+    fish_profile world2_fish2 = {images.fish2_image, &images.fish2_image_frames_amount, "fish 2", world2_fish2_collision_frame, false, false, Size(130, 112), 1.75, 6, 15, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 3 -
     
@@ -2806,7 +2929,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish3_paths_stacks[] = {world2_fish3_paths_stack_wander_right, world2_fish3_paths_stack_wander_left};
-    fish_profile world2_fish3 = {images.fish3_image, &images.fish3_image_frames_amount, "fish 3", false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish3_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
+    frame world2_fish3_collision_frame = {-62, 16, 516, 430};
+    fish_profile world2_fish3 = {images.fish3_image, &images.fish3_image_frames_amount, "fish 3", world2_fish3_collision_frame, false, true, Size(170, 150), 3, 3, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish3_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // - Fish 4 -
     
@@ -2822,7 +2946,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish4_paths_stacks[] = {world2_fish4_paths_stack_wander_right, world2_fish4_paths_stack_wander_left};
-    fish_profile world2_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
+    frame world2_fish4_collision_frame = {0, 0, 616, 686};
+    fish_profile world2_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", world2_fish4_collision_frame, true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // - Fish 5 -
     
@@ -2838,7 +2963,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish5_paths_stacks[] = {world2_fish5_paths_stack_wander_right, world2_fish5_paths_stack_wander_left};
-    fish_profile world2_fish5 = {images.fish5_image, &images.fish5_image_frames_amount, "fish 5", false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish5_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
+    frame world2_fish5_collision_frame = {-49, 4, 542, 356};
+    fish_profile world2_fish5 = {images.fish5_image, &images.fish5_image_frames_amount, "fish 5", world2_fish5_collision_frame, false, true, Size(130, 94), 1.5, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish5_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 6 -
     
@@ -2854,7 +2980,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish6_paths_stacks[] = {world2_fish6_paths_stack_wander_right, world2_fish6_paths_stack_wander_left};
-    fish_profile world2_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.6};
+    frame world2_fish6_collision_frame = {22, -4, 467, 431};
+    fish_profile world2_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", world2_fish6_collision_frame, true, false, Size(150, 122), 1.75, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.6};
     
     // - Fish 7 -
     
@@ -2870,7 +2997,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish7_paths_stacks[] = {world2_fish7_paths_stack_wander_right, world2_fish7_paths_stack_wander_left};
-    fish_profile world2_fish7 = {images.fish7_image, &images.fish7_image_frames_amount, "fish 7", false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish7_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
+    frame world2_fish7_collision_frame = {-43, -20, 546, 375};
+    fish_profile world2_fish7 = {images.fish7_image, &images.fish7_image_frames_amount, "fish 7", world2_fish7_collision_frame, false, true, Size(250, 202), 1.75, 4, 10, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish7_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 8 -
     
@@ -2886,7 +3014,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish8_paths_stacks[] = {world2_fish8_paths_stack_wander_right, world2_fish8_paths_stack_wander_left};
-    fish_profile world2_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.7};
+    frame world2_fish8_collision_frame = {0, 0, 640, 576};
+    fish_profile world2_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", world2_fish8_collision_frame, true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world2_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.7};
     
     // - Fish 9 -
     
@@ -2902,7 +3031,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish9_paths_stacks[] = {world2_fish9_paths_stack_wander_right, world2_fish9_paths_stack_wander_left};
-    fish_profile world2_fish9 = {images.fish9_image, &images.fish9_image_frames_amount, "fish 9", false, true, Size(150, 123), 3, 12, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish9_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.33};
+    frame world2_fish9_collision_frame = {0, 0, 658, 540};
+    fish_profile world2_fish9 = {images.fish9_image, &images.fish9_image_frames_amount, "fish 9", world2_fish9_collision_frame, false, true, Size(150, 123), 3, 12, 20, 0, 2, 30, 300, 1.2, 2, true, 2, world2_fish9_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.33};
     
     // - Fish 10 -
     
@@ -2918,7 +3048,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish10_paths_stacks[] = {world2_fish10_paths_stack_wander_right, world2_fish10_paths_stack_wander_left};
-    fish_profile world2_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.3};
+    frame world2_fish10_collision_frame = {16, 13, 396, 375};
+    fish_profile world2_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", world2_fish10_collision_frame, true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.3};
     
     // - Fish 11 -
     
@@ -2934,7 +3065,8 @@ int main()
     
     // Fish profile.
     paths_stack world2_fish11_paths_stacks[] = {world2_fish11_paths_stack_wander_right, world2_fish11_paths_stack_wander_left};
-    fish_profile world2_fish11 = {images.fish11_image, &images.fish11_image_frames_amount, "fish 11", false, true, Size(600, 510), 2, 1, 10, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish11_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.2};
+    frame world2_fish11_collision_frame = {-56, 59, 413, 341};
+    fish_profile world2_fish11 = {images.fish11_image, &images.fish11_image_frames_amount, "fish 11", world2_fish11_collision_frame, false, true, Size(600, 510), 2, 1, 10, 0, 2, 30, 300, 1.2, 2, false, 2, world2_fish11_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.2};
     
     // - Crab 1 -
     
@@ -2950,13 +3082,14 @@ int main()
     
     // Fish profile.
     paths_stack world2_crab1_paths_stacks[] = {world2_crab1_paths_stack_wander_right, world2_crab1_paths_stack_wander_left};
-    fish_profile world2_crab1 = {images.crab1_image, &images.crab1_image_frames_amount, "crab 1", true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world2_crab1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
+    frame world2_crab1_collision_frame = {0, 0, 790, 790};
+    fish_profile world2_crab1 = {images.crab1_image, &images.crab1_image_frames_amount, "crab 1", world2_crab1_collision_frame, true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world2_crab1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
     
     // -- Setup --
     
     fish_profile world2_fish_profiles_on_startup[] = {};
     fish_profile world2_available_fish[] = {world2_fish1, world2_fish2, world2_fish3, world2_fish4, world2_fish5, world2_fish6, world2_fish7, world2_fish8, world2_fish9, world2_fish10, world2_fish11, world2_crab1};
-    FishNetwork world2_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world2_grid, world2_fish_profiles_on_startup, 0, world2_available_fish, 12, X_COORD_OFFSET, world2_my_fish.get_updated_rectangular_frame());
+    FishNetwork world2_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world2_grid, world2_fish_profiles_on_startup, 0, world2_available_fish, 12, X_COORD_OFFSET, world2_my_fish.get_updated_rectangular_frame_double_size());
     world2_fish_network.update_boundaries(-X_COORD_OFFSET, world2.width + X_COORD_OFFSET, 0, world2.height, true);
 
     // ----- Final Set-ups World2 -----
@@ -2986,7 +3119,8 @@ int main()
     // --- my fish ---
     
     Cell** world3_cells_within_my_fish = new Cell*[GRID_ROWS * GRID_COLS];
-    MyFish world3_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, false, Location(world3.width / 2, world3.height / 2), Size(150, 107), 15, 15, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world3_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
+    frame world3_my_fish_collision_frame = {-54, -4, 549, 439};
+    MyFish world3_my_fish = MyFish(FPS, images.my_fish_image, &images.my_fish_image_frames_amount, world3_my_fish_collision_frame, false, Location(world3.width / 2, world3.height / 2), Size(150, 107), 23, 23, 0, 0, 0, 0, 1, 15, EAT_GROW_RATIO, 1.2, 10000, 0, true, FISH_POPULATION, world3_cells_within_my_fish, Location(100, SCREEN_HEIGHT - 75), Size(150, 20), 1, 2, FPS * 2, FPS * 5, Location(350, SCREEN_HEIGHT - 75), Size(150, 20), 1, audio.sound_eat, audio.sound_sting1);
 
     // --- Fish Network ---
 
@@ -3006,7 +3140,8 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish4_paths_stacks[] = {world3_fish4_paths_stack_wander_right, world3_fish4_paths_stack_wander_left};
-    fish_profile world3_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2.5};
+    frame world3_fish4_collision_frame = {0, 0, 616, 686};
+    fish_profile world3_fish4 = {images.fish4_image, &images.fish4_image_frames_amount, "fish 4", world3_fish4_collision_frame, true, true, Size(90, 100), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish4_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2.5};
     
     // - Fish 6 -
     
@@ -3022,7 +3157,8 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish6_paths_stacks[] = {world3_fish6_paths_stack_wander_right, world3_fish6_paths_stack_wander_left};
-    fish_profile world3_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", true, false, Size(150, 122), 2, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world3_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
+    frame world3_fish6_collision_frame = {22, -4, 467, 431};
+    fish_profile world3_fish6 = {images.fish6_image, &images.fish6_image_frames_amount, "fish 6", world3_fish6_collision_frame, true, false, Size(150, 122), 2, 6, 18, 0, 2, 30, 300, 1.2, 2, true, 2, world3_fish6_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.8};
     
     // - Fish 8 -
     
@@ -3038,7 +3174,8 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish8_paths_stacks[] = {world3_fish8_paths_stack_wander_right, world3_fish8_paths_stack_wander_left};
-    fish_profile world3_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2.5};
+    frame world3_fish8_collision_frame = {0, 0, 640, 576};
+    fish_profile world3_fish8 = {images.fish8_image, &images.fish8_image_frames_amount, "fish 8", world3_fish8_collision_frame, true, true, Size(90, 81), 1.2, 15, 35, 0, 3, 30, 300, 1.2, 2, true, 2, world3_fish8_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 2.5};
     
     // - Fish 10 -
     
@@ -3054,7 +3191,8 @@ int main()
     
     // Fish profile.
     paths_stack world3_fish10_paths_stacks[] = {world3_fish10_paths_stack_wander_right, world3_fish10_paths_stack_wander_left};
-    fish_profile world3_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world3_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.07};
+    frame world3_fish10_collision_frame = {16, 13, 396, 375};
+    fish_profile world3_fish10 = {images.fish10_image, &images.fish10_image_frames_amount, "fish 10", world3_fish10_collision_frame, true, false, Size(480, 459), 2, 8, 25, 0, 2, 30, 300, 1.2, 2, false, 2, world3_fish10_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 0.07};
     
     // - Crab 1 -
     
@@ -3070,7 +3208,8 @@ int main()
     
     // Fish profile.
     paths_stack world3_crab1_paths_stacks[] = {world3_crab1_paths_stack_wander_right, world3_crab1_paths_stack_wander_left};
-    fish_profile world3_crab1 = {images.crab1_image, &images.crab1_image_frames_amount, "crab 1", true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
+    frame world3_crab1_collision_frame = {0, 0, 790, 790};
+    fish_profile world3_crab1 = {images.crab1_image, &images.crab1_image_frames_amount, "crab 1", world3_crab1_collision_frame, true, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
 
     // - Crab 2 -
     
@@ -3086,7 +3225,8 @@ int main()
     
     // Fish profile.
     paths_stack world3_crab2_paths_stacks[] = {world3_crab2_paths_stack_wander_right, world3_crab2_paths_stack_wander_left};
-    fish_profile world3_crab2 = {images.crab2_image, &images.crab2_image_frames_amount, "crab 2", false, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
+    frame world3_crab2_collision_frame = {0, 0, 790, 790};
+    fish_profile world3_crab2 = {images.crab2_image, &images.crab2_image_frames_amount, "crab 2", world3_crab2_collision_frame, false, true, Size(75, 75), 1, 1, 10, 0, 0, 30, 300, 10, 1, false, 2, world3_crab2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1};
 
     // - Jelly Fish 1 -
     
@@ -3106,7 +3246,8 @@ int main()
     
     // Fish profile.
     paths_stack world3_jelly_fish1_paths_stacks[] = {world3_jelly_fish1_paths_stack_fall_down1, world3_jelly_fish1_paths_stack_fall_down2, world3_jelly_fish1_paths_stack_fall_down3};
-    fish_profile world3_jeflly_fish1 = {images.jelly_fish1_image, &images.jeflly_fish1_image_frames_amount, "Jelly Fish", true, false, Size(200, 200), 1.3, 3, 20, 0, 7, 30, 300, 1.2, 2, true, 3, world3_jelly_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.3};
+    frame world3_jeflly_fish1_collision_frame = {-8, -9, 384, 528};
+    fish_profile world3_jeflly_fish1 = {images.jelly_fish1_image, &images.jeflly_fish1_image_frames_amount, "Jelly Fish", world3_jeflly_fish1_collision_frame, true, false, Size(170, 204), 1.3, 3, 20, 0, 7, 30, 300, 1.2, 2, true, 3, world3_jelly_fish1_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.3};
     
     // - Jelly Fish 2 -
     
@@ -3126,13 +3267,14 @@ int main()
     
     // Fish profile.
     paths_stack world3_jelly_fish2_paths_stacks[] = {world3_jelly_fish2_paths_stack_fall_down1, world3_jelly_fish2_paths_stack_fall_down2, world3_jelly_fish2_paths_stack_fall_down3};
-    fish_profile world3_jeflly_fish2 = {images.jelly_fish2_image, &images.jeflly_fish2_image_frames_amount, "Jelly Fish", true, false, Size(180, 180), 1.3, 3, 20, 0, 3, 30, 300, 1.2, 2, true, 3, world3_jelly_fish2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.2};
+    frame world3_jeflly_fish2_collision_frame = {-4, -8, 323, 544};
+    fish_profile world3_jeflly_fish2 = {images.jelly_fish2_image, &images.jeflly_fish2_image_frames_amount, "Jelly Fish", world3_jeflly_fish2_collision_frame, true, false, Size(150, 227), 1.3, 3, 20, 0, 3, 30, 300, 1.2, 2, true, 3, world3_jelly_fish2_paths_stacks, audio.sound_eat_lower, audio.sound_sting1_lower, 1.2};
     
     // -- Setup --
     
     fish_profile world3_fish_profiles_on_startup[] = {};
     fish_profile world3_available_fish[] = {world3_fish4, world3_fish6, world3_fish8, world3_fish10, world3_crab1, world3_crab2, world3_jeflly_fish1, world3_jeflly_fish2};
-    FishNetwork world3_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world3_grid, world3_fish_profiles_on_startup, 0, world3_available_fish, 8, X_COORD_OFFSET, world3_my_fish.get_updated_rectangular_frame());
+    FishNetwork world3_fish_network = FishNetwork(FPS, FISH_POPULATION, EAT_GROW_RATIO, &world3_grid, world3_fish_profiles_on_startup, 0, world3_available_fish, 8, X_COORD_OFFSET, world3_my_fish.get_updated_rectangular_frame_double_size());
     world3_fish_network.update_boundaries(-X_COORD_OFFSET, world3.width + X_COORD_OFFSET, 0, world3.height, true);
 
     // ----- Final Set-ups World3 -----
@@ -3655,8 +3797,8 @@ int main()
                         for (int second_entity_index = first_entity_index + 1; second_entity_index < current_cell_entities_amount; second_entity_index++)
                         {
                             // Get the rectangle frame of the two entities.
-                            first_entity_rectangle = entities_in_cell[first_entity_index] -> get_updated_rectangular_frame();
-                            second_entity_rectangle = entities_in_cell[second_entity_index] -> get_updated_rectangular_frame();
+                            first_entity_rectangle = entities_in_cell[first_entity_index] -> get_updated_collision_frame();
+                            second_entity_rectangle = entities_in_cell[second_entity_index] -> get_updated_collision_frame();
                             
                             // Check if the two current entities are overlapping.
                             if (CheckCollisionRecs(first_entity_rectangle, second_entity_rectangle))
@@ -3678,8 +3820,9 @@ int main()
             // Camera follows my fish movement.
             
             // If the fish is not close to the boundaries.
-            if (!is_camera_dispatch_x) { camera_pos_x = my_fish.get_location().x; }
-            if (!is_camera_dispatch_y) { camera_pos_y = my_fish.get_location().y; }
+            if (!is_camera_dispatch_x) { camera_pos_x = max((int)ceil(camera_current_width / 2), min(my_fish.get_location().x, (int)(world.width - ceil(camera_current_width / 2)))); }
+            
+            if (!is_camera_dispatch_y) { camera_pos_y = max((int)ceil(camera_current_height / 2), min(my_fish.get_location().y, (int)(world.height - ceil(camera_current_height / 2)))); }
 
             // Update the camera position.
             if (!debug_camera) { camera.target = (Vector2){ (float) camera_pos_x, (float) camera_pos_y }; }
@@ -3816,7 +3959,7 @@ int main()
                     if (debug)
                     {
                         fish_network.print_frames();
-                        Rectangle frame = my_fish.get_updated_rectangular_frame();
+                        Rectangle frame = my_fish.get_updated_collision_frame();
                         DrawRectangle(frame.x,frame.y, frame.width, frame.height, RED);
                     }
                     
@@ -3867,7 +4010,6 @@ int main()
     UnloadSound(audio.sound_eat_lower);
     UnloadSound(audio.sound_sting1);
     UnloadSound(audio.sound_sting1_lower);
-    
     
     CloseAudioDevice();
     
