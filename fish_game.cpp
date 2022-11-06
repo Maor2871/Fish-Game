@@ -6,6 +6,7 @@
 #include <cmath>
 #include "pthread.h"
 #include <atomic> 
+#include <dirent.h>
 using namespace std;
 
 
@@ -2063,6 +2064,9 @@ class Save
         // The path to the saving file.
         string file_path;
         
+        // The path to the template save file in the resources directory.
+        string resources_file_path;
+        
         // The file handler.
         fstream save_file;
         
@@ -2074,10 +2078,37 @@ class Save
     
     public:
     
-        Save(string new_file_path)
+        Save(string new_file_path, string new_resources_file_path)
         {
             // Save the path of the save file.
             file_path = new_file_path;
+            resources_file_path = new_resources_file_path;
+
+            //TraceLog(1, ("file path: " + file_path + "\n").c_str());
+            //TraceLog(1, ("resourecs file path: " + resources_file_path + "\n").c_str());
+
+            // If the file path is not the resources path.
+            if (file_path != resources_file_path)
+            {
+                //TraceLog(1, "different.\n");
+
+                // Try to access the file.
+                std::ifstream f(file_path.c_str());
+                
+                // If the save file does not exist yet, create it with the template from the resources directory.
+                if (!f.good())
+                {
+                    //TraceLog(1, "not good.\n");
+                    
+                    // Copy the template file.
+                    
+                    ofstream outfile (file_path);
+
+                    outfile << "hello";
+
+                    outfile.close();
+                }
+            }
             
             // Open the file.
             save_file.open(file_path, ios::in | ios::out | ios::app | ios::binary);
@@ -2086,21 +2117,30 @@ class Save
             world_checkpoint = 1;
             
             // - Read the file -
-            TraceLog(1, "Trying to load..");
+            //TraceLog(1, "Trying to load..");
             if (!save_file) { return; }
-            TraceLog(1, "Loaded!");
+            //TraceLog(1, "Loaded!");
             // The current line read from the file.
             string current_line;
             
             // Do not read more than 100 lines from the file.
             int count = 100;
-            
+            string temp;
+            //TraceLog(1, "is eof?\n");
             // Iterate over the lines of the file.
-            while (getline(save_file, current_line) && count > 0)
+            while (!save_file.eof() && count > 0)
             {
+                getline(save_file, current_line);
+                
+                for (int i=0; i<100; i++)
+                {
+                    temp = current_line[i];
+                    //TraceLog(1, temp.c_str());
+                }
+                
                 // Decrypt the current line.
                 current_line = decrypt(current_line);
-
+                //TraceLog(1, ("current line:" + current_line).c_str());
                 // Add the line to the file content.
                 current_file_content += current_line + "\n";
 
@@ -2120,6 +2160,9 @@ class Save
                 // Count one more line.
                 count--;
             }
+            //TraceLog(1, "was it?\n");
+            //TraceLog(1, "final content:\n");
+            //TraceLog(1, current_file_content.c_str());
             
             // Make the file ready to write.
             save_file.clear();
@@ -2128,6 +2171,7 @@ class Save
         // The function updates the world checkpoint in the file and in the world_checkpoint variable.
         void update_world_checkpoint(int new_checkpoint)
         {
+            //TraceLog(1, ("updating world checkpoint to:" + to_string(new_checkpoint) + ".\n").c_str());
             // Update the value of world checkpoint.
             world_checkpoint = new_checkpoint;
             
@@ -2161,7 +2205,8 @@ class Save
                 // Move to the next index.
                 current_index++;
             }
-            
+            //TraceLog(1, "before calling to update:\n");
+            //TraceLog(1, current_file_content.c_str());
             // Update the new content of the file.
             update_file_content();
         }
@@ -2177,7 +2222,8 @@ class Save
             
             // Write the updated content.
             save_file << encrypt(current_file_content);
-            
+            //TraceLog(1, "in update:\n");
+            //TraceLog(1, current_file_content.c_str());
             // Close the file.
             save_file.close();
             
@@ -2219,7 +2265,7 @@ class Save
             
             // The current char index.
             int char_index = 0;
-
+            //TraceLog(1, ("to decrypt: " + to_decrypt + "\n").c_str());
             // Iterate over the received string.
             while (index < (int) to_decrypt.length())
             {
@@ -2240,7 +2286,7 @@ class Save
                 else 
                 {
                     // This is not a number, the received string was not encrypted according to the protocol. Return an empty string.
-                    if (!isdigit(to_decrypt[index])) { return ""; }
+                    //if (!isdigit(to_decrypt[index])) { ; return ""; }
                     
                     // Update the current decrypted character.
                     current += to_decrypt[index]; 
@@ -2249,7 +2295,7 @@ class Save
                 // Move to the next character in the received string.
                 index++;
             }
-            
+            //TraceLog(1, ("decrypted: " + decrypted + "\n").c_str());
             // Return the decrypted string.
             return decrypted;
         }
@@ -2371,6 +2417,10 @@ int main()
 	
 	// ### --- Constants --- ###
 	
+    // Is for android.
+    bool IS_ANDROID = true;
+    string PACKAGE_NAME = "com.MRStudios.TheFish";
+    
 	// - Screen
 	int SCREEN_WIDTH = 0;
 	int SCREEN_HEIGHT = 0;
@@ -2380,6 +2430,9 @@ int main()
     // - Graphics Paths
     const char* PATH_MAIN_MENU = "resources/Textures/Menus/Main Menu/Main Menu.png";
     const char* PATH_CAMPAIN_BUTTON = "resources/Textures/Menus/Main Menu/Campain Button.png";
+    const char* PATH_ABOUT_BUTTON = "resources/Textures/Menus/Main Menu/About Button.png";
+    const char* PATH_ABOUT_WINDOW = "resources/Textures/Menus/Main Menu/About.png";
+    const char* PATH_CLOSE_BUTTON = "resources/Textures/Menus/Main Menu/Close Button.png";
     const char* PATH_CAMPAIN_WELCOME1 = "resources/Textures/Menus/Main Menu/Campain Welcome 1.png";
     const char* PATH_CAMPAIN_WELCOME2 = "resources/Textures/Menus/Main Menu/Campain Welcome 2.png";
     const char* PATH_CAMPAIN_WELCOME3 = "resources/Textures/Menus/Main Menu/Campain Welcome 3.png";
@@ -2390,8 +2443,11 @@ int main()
     const char* PATH_MAP = "resources/Textures/Menus/Map/Map.png";
     const char* PATH_VICTORY = "resources/Textures/Menus/Windows/Victory.png";
     const char* PATH_DEFEAT = "resources/Textures/Menus/Windows/Defeat.png";
+    const char* PATH_PAUSE_WINDOW = "resources/Textures/Menus/Windows/Pause.png";
     const char* PATH_MAP_BUTTON = "resources/Textures/Menus/Windows/Map Button.png";
+    const char* PATH_RESUME_BUTTON = "resources/Textures/Menus/Windows/Resume Button.png";
     //const char* PATH_TURBO_BUTTON = "resources/Textures/Worlds/Turbo Button.png";
+    const char* PATH_PAUSE_BUTTON = "resources/Textures/Worlds/Pause Button.png";
     const char* PATH_WORLD1_BUTTON = "resources/Textures/Menus/Map/World 1 Button.png";
     const char* PATH_WORLD2_BUTTON = "resources/Textures/Menus/Map/World 2 Button.png";
     const char* PATH_WORLD3_BUTTON = "resources/Textures/Menus/Map/World 3 Button.png";
@@ -2430,7 +2486,12 @@ int main()
     const char* PATH_SOUND_STING1_LOWER = "resources/Music/Sounds/Sting 1 Lower.mp3";
     
     // - Other Paths
-    string path_game_progress_file = "resources/save.txt";
+    string path_game_progress_file;
+    string path_resources_save_file = "resources/save.txt";
+    
+    if (IS_ANDROID) { path_game_progress_file = "/data/data/" + PACKAGE_NAME + "/files/save.txt"; }
+    //if (IS_ANDROID) { path_game_progress_file = "C:/The Fish/save.txt"; }
+    else { path_game_progress_file = path_resources_save_file; }
     
     // - Game Properties
     const int FISH_POPULATION = 50;
@@ -2443,9 +2504,45 @@ int main()
     
     SetTraceLogLevel(1);
     
+    /*
+    string data_data = "/data/data/";
+    string data_data_package = "/data/data/The_Fish/";
+    for (const auto & entry : std::__fs::filesystem::directory_iterator(data_data))
+        TraceLog(1, (entry.path().generic_string() + "\n").c_str());
+    
+    for (const auto & entry : std::__fs::filesystem::directory_iterator(data_data_package))
+        TraceLog(1, (entry.path().generic_string() + "\n").c_str());
+
+    DIR *dir;
+    struct dirent *ent;
+    if ((dir = opendir ("data/data/")) != NULL) {
+      // print all the files and directories within directory
+      while ((ent = readdir (dir)) != NULL) {
+        TraceLog(1, (string(ent->d_name) + "\n").c_str());
+      }
+      closedir (dir);
+    } else {
+      // could not open directory//
+      perror ("");
+      return EXIT_FAILURE;
+    }
+    
+    DIR *dir2;
+    struct dirent *ent2;
+    if ((dir2 = opendir ("data/data/The_Fish/")) != NULL) {
+      // print all the files and directories within directory 
+      while ((ent2 = readdir (dir2)) != NULL) {
+        TraceLog(1, (string(ent2->d_name) + "\n").c_str());
+      }
+      closedir (dir2);
+    } else {
+      // could not open directory
+      perror ("");
+      return EXIT_FAILURE;
+    }
+    */
     // Load game progress data.
-    Save game_save = Save(path_game_progress_file);
-    game_save.update_world_checkpoint(1);
+    Save game_save = Save(path_game_progress_file, path_resources_save_file);
 
 	// ### --- GUI Initialization --- ###
 	
@@ -2555,7 +2652,8 @@ int main()
     }
     
     // # ----- Variables -----
-
+    
+    bool pause = false;
 	Texture2D world;
     MyFish my_fish;
     FishNetwork fish_network;
@@ -2585,6 +2683,21 @@ int main()
     // Define frame rectangle for drawing.
     Rectangle campain_button_frame = { (float) floor (SCREEN_WIDTH / 2 - campain_button.width / 2), (float) floor(SCREEN_HEIGHT / 2 - main_menu.height / 2) + 400, (float) campain_button.width, (float) campain_button.height };
     
+    // Load the about button.
+    Texture2D about_button = LoadTexture(PATH_ABOUT_BUTTON);
+    
+    // Define frame rectangle for drawing.
+    Rectangle about_button_frame = { (float) floor (SCREEN_WIDTH / 2 - about_button.width / 2), (float) floor(SCREEN_HEIGHT / 2 - about_button.height / 2) + 100, (float) about_button.width, (float) about_button.height };
+    
+    // Load the main menu texture.
+    Texture2D about_window = LoadTexture(PATH_ABOUT_WINDOW);
+    
+    // Load the campain button.
+    Texture2D about_close_button = LoadTexture(PATH_CLOSE_BUTTON); 
+    
+    // Define frame rectangle for drawing.
+    Rectangle about_close_button_frame = { (float) floor (SCREEN_WIDTH / 2 + about_window.width / 2 - about_close_button.width / 2 - 80), (float) floor(SCREEN_HEIGHT / 2 - about_window.height / 2 + about_close_button.height / 2 + 25), (float) about_close_button.width, (float) about_close_button.height };
+    
     // Load the campain welcome window.
     Texture2D campain_welcome_window1 = LoadTexture(PATH_CAMPAIN_WELCOME1);
     Texture2D campain_welcome_window2 = LoadTexture(PATH_CAMPAIN_WELCOME2);
@@ -2596,6 +2709,9 @@ int main()
     
     // If true, show the campain welcome window.
     bool is_campain_welcome_window = false;
+    
+    // If true, show the about window.
+    bool is_about_window = false;
     
     // The current campain window.
     int current_campain_welcome_window = 1;
@@ -2630,7 +2746,7 @@ int main()
     Texture2D back_to_map_button = LoadTexture(PATH_MAP_BUTTON);
     
     // The frame of the back to map button.
-    Rectangle back_to_map_button_frame = {(float) floor(SCREEN_WIDTH / 2 - back_to_map_button.width / 2), (float) floor(SCREEN_HEIGHT / 2) + 150, (float) back_to_map_button.width, (float) back_to_map_button.height};
+    Rectangle back_to_map_button_frame = {(float) floor(SCREEN_WIDTH / 2 - back_to_map_button.width / 2), (float) floor(SCREEN_HEIGHT / 2) + 250, (float) back_to_map_button.width, (float) back_to_map_button.height};
     
     // True if victory/defeat.
     bool is_victory = false, is_defeat = false;
@@ -2640,6 +2756,21 @@ int main()
     
     // Define frame rectangle for drawing.
     Rectangle exit_welcome_window_button_frame = { (float) floor (SCREEN_WIDTH / 2 - exit_welcome_window_button.width / 2), (float) floor(SCREEN_HEIGHT / 2) + 300, (float) exit_welcome_window_button.width, (float) exit_welcome_window_button.height };
+    
+    // The pause window.
+    Texture2D pause_window = LoadTexture(PATH_PAUSE_WINDOW);
+    
+    // The back to map button.
+    Texture2D resume_game_button = LoadTexture(PATH_RESUME_BUTTON);
+    
+    // The frame of the resume button.
+    Rectangle resume_button_frame = {(float) floor(SCREEN_WIDTH / 2 - resume_game_button.width / 2), (float) floor(SCREEN_HEIGHT / 2) + 250, (float) resume_game_button.width, (float) resume_game_button.height};
+    
+    // The pause button.
+    Texture2D pause_button = LoadTexture(PATH_PAUSE_BUTTON);
+    
+    // The frame of the resume button.
+    Rectangle pause_button_frame = {(float) (20), (float) (25), (float) pause_button.width, (float) pause_button.height};
     
     // Define the turbo button.
     //Texture2D turbo_button = LoadTexture(PATH_TURBO_BUTTON);
@@ -3331,6 +3462,22 @@ int main()
         // Play the current background music in loop.
         if (!IsSoundPlaying(current_music)) { PlaySound(current_music); }
         
+        // --- Game Pause Check ---
+        
+        // Check if need to puase the game.
+        if (current_screen == "World")
+        {
+            // Get the current position of the mouse.
+            mouse_point = GetMousePosition();
+                
+            // Check if pause button pressed.
+            if (CheckCollisionPointRec(mouse_point, pause_button_frame) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            {
+                // pause the game.
+                pause = true;
+            }
+        }
+        
         // --- Update Data ---
         
         if (current_screen == "Main Menu" || current_screen == "Map")
@@ -3361,12 +3508,30 @@ int main()
                 }
             }
             
+            // Currently showing the about window.
+            else if (is_about_window)
+            {
+                // Check if the close button is pressed.
+                if (CheckCollisionPointRec(mouse_point, about_close_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+                {
+                    // Close the about window.
+                    is_about_window = false;
+                }
+            }
+            
             // The campain button was pressed.
             else if (CheckCollisionPointRec(mouse_point, campain_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 // If currently on the first world.
                 if (game_save.world_checkpoint == 1) { is_campain_welcome_window = true; }
                 else { current_screen = "Map"; }
+            }
+            
+            // The about button was pressed.
+            else if (CheckCollisionPointRec(mouse_point, about_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                // Set the about window.
+                is_about_window = true;
             }
         }
         
@@ -3563,6 +3728,22 @@ int main()
             // Keep the fish moving in the background.
             fish_network.set_next_frame();
             my_fish.set_next_frame();
+        }
+        
+        else if (pause)
+        {
+            // Get the current position of the mouse.
+            mouse_point = GetMousePosition();
+            
+            if (CheckCollisionPointRec(mouse_point, resume_button_frame) && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                // resume the game.
+                pause = false;
+            }
+            
+            // Prepare all the fish to their next gif frame.
+            my_fish.set_next_frame();        
+            fish_network.set_next_frame();
         }
         
         else if(current_screen == "World")
@@ -3921,6 +4102,16 @@ int main()
                     }
                 }
                 
+                // Draw the about window.
+                else if (is_about_window)
+                {
+                    // Draw the about window.
+                    DrawTexture(about_window, (int) floor (SCREEN_WIDTH / 2 - about_window.width / 2), (int) floor(SCREEN_HEIGHT / 2 - about_window.height / 2), WHITE);
+                    
+                    // Draw the close button.
+                    DrawTexture(about_close_button, about_close_button_frame.x, about_close_button_frame.y, WHITE);
+                }
+                
                 // Draw the main menu.
                 else
                 {
@@ -3929,6 +4120,9 @@ int main()
                 
                     // Draw the campain button.
                     DrawTexture(campain_button, campain_button_frame.x, campain_button_frame.y, WHITE);
+                    
+                    // Draw the about button.
+                    DrawTexture(about_button, about_button_frame.x, about_button_frame.y, WHITE);
                     
                     DrawText("Game: MRS games. Music: geoffharvey. Animations: Terdpong", 2, 10, 20, BLACK);
                 }               
@@ -4020,6 +4214,20 @@ int main()
 
                 // Draw the current scale widget.
                 my_fish.draw_scale_widget();
+                
+                // If paused, draw the pause window.
+                if (pause)
+                {
+                    DrawTexture(pause_window, (int) floor(SCREEN_WIDTH / 2 - pause_window.width / 2), (int) floor(SCREEN_HEIGHT / 2 - pause_window.height / 2), WHITE);
+                    DrawTexture(resume_game_button, resume_button_frame.x, resume_button_frame.y, WHITE);
+                }
+                
+                // Draw the pause button.
+                else
+                {
+                    cout << "drawing pause button: " << pause_button_frame.x << ", " << pause_button_frame.y << "\n";
+                    DrawTexture(pause_button, pause_button_frame.x, pause_button_frame.y, WHITE);
+                }
                 
                 // Draw the current turbo widget.
                 //my_fish.draw_turbo_widget();
